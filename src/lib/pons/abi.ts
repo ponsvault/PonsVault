@@ -1,0 +1,65 @@
+export const PONS_LAUNCHPAD_ABI = [
+  {
+    type: 'function',
+    name: 'launchToken',
+    stateMutability: 'payable',
+    inputs: [
+      {
+        name: 'metadata',
+        type: 'tuple',
+        components: [
+          { name: 'name', type: 'string' },
+          { name: 'symbol', type: 'string' },
+          { name: 'logo', type: 'string' },
+          { name: 'description', type: 'string' },
+          {
+            name: 'socials',
+            type: 'tuple',
+            components: [
+              { name: 'twitter', type: 'string' },
+              { name: 'telegram', type: 'string' },
+              { name: 'discord', type: 'string' },
+              { name: 'website', type: 'string' },
+              { name: 'farcaster', type: 'string' },
+            ],
+          },
+          { name: 'feeWallet', type: 'address' },
+        ],
+      },
+      { name: 'launchConfigId', type: 'uint256' },
+      { name: 'dexId', type: 'uint256' },
+      { name: 'salt', type: 'bytes32' },
+    ],
+    outputs: [{ name: 'token', type: 'address' }],
+  },
+  {
+    type: 'event',
+    name: 'TokenLaunched',
+    inputs: [
+      { name: 'token', type: 'address', indexed: true },
+      { name: 'deployer', type: 'address', indexed: true },
+      { name: 'dexFactory', type: 'address', indexed: true },
+      { name: 'pairToken', type: 'address', indexed: false },
+      { name: 'pool', type: 'address', indexed: false },
+      { name: 'dexId', type: 'uint256', indexed: false },
+      { name: 'launchConfigId', type: 'uint256', indexed: false },
+      { name: 'positionId', type: 'uint256', indexed: false },
+      { name: 'restrictionsEndBlock', type: 'uint256', indexed: false },
+      { name: 'initialBuyAmount', type: 'uint256', indexed: false },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'launchEnabled',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bool' }],
+  },
+  {
+    type: 'function',
+    name: 'launchFee',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
