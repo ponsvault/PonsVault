@@ -10,7 +10,17 @@ import type { PonsLaunchRecord } from './types';
 export async function enrichLaunchRecord(
   launch: Pick<
     PonsLaunchRecord,
-    'token' | 'name' | 'symbol' | 'description' | 'logo' | 'deployer' | 'launchedAt' | 'transactionHash'
+    | 'token'
+    | 'name'
+    | 'symbol'
+    | 'description'
+    | 'logo'
+    | 'deployer'
+    | 'launchedAt'
+    | 'transactionHash'
+    | 'feeWallet'
+    | 'feeSharePlatform'
+    | 'feeShareHandle'
   >,
 ): Promise<PonsLaunchRecord> {
   const token = launch.token as Address;
@@ -58,7 +68,17 @@ export async function enrichLaunchRecords(
   launches: Array<
     Pick<
       PonsLaunchRecord,
-      'token' | 'name' | 'symbol' | 'description' | 'logo' | 'deployer' | 'launchedAt' | 'transactionHash'
+      | 'token'
+      | 'name'
+      | 'symbol'
+      | 'description'
+      | 'logo'
+      | 'deployer'
+      | 'launchedAt'
+      | 'transactionHash'
+      | 'feeWallet'
+      | 'feeSharePlatform'
+      | 'feeShareHandle'
     >
   >,
 ): Promise<PonsLaunchRecord[]> {

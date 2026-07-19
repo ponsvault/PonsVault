@@ -2,13 +2,13 @@
 
 import { usePrivy } from '@privy-io/react-auth';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Loader2, Wallet } from 'lucide-react';
+import { Copy, ExternalLink, KeyRound, Loader2, Wallet } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
-import { fetchClaimProfile, isPrivyConfigured, recordFeeClaim } from '@/lib/fee-share/api';
-import { ponsTokenUrl, txUrl } from '@/lib/pons/launch';
+import { exportFeeSharePrivateKey, fetchClaimProfile, isPrivyConfigured } from '@/lib/fee-share/api';
+import { txUrl } from '@/lib/pons/launch';
 import { shortAddress, ipfsToGateway } from '@/lib/utils';
 
 export function ClaimDashboard() {
@@ -29,6 +29,10 @@ export function ClaimDashboard() {
 
 function ClaimDashboardInner() {
   const { ready, authenticated, login, logout, getAccessToken, user } = usePrivy();
+  const [exportError, setExportError] = useState('');
+  const [exportedKey, setExportedKey] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const token = await getAccessToken();
@@ -41,6 +45,36 @@ function ClaimDashboardInner() {
     queryFn: loadProfile,
     enabled: authenticated,
   });
+
+  async function handleExportKey() {
+    setExportError('');
+    setExportedKey(null);
+    setCopied(false);
+
+    const confirmed = window.confirm(
+      'Exporting reveals your fee-share wallet private key. Anyone with this key controls the wallet and its funds. Continue?',
+    );
+    if (!confirmed) return;
+
+    setExporting(true);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error('Could not read Privy access token.');
+      const result = await exportFeeSharePrivateKey(token);
+      setExportedKey(result.privateKey);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Failed to export private key');
+    } finally {
+      setExporting(false);
+    }
+  }
+
+  async function copyExportedKey() {
+    if (!exportedKey) return;
+    await navigator.clipboard.writeText(exportedKey);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2000);
+  }
 
   if (!ready) {
     return <p className="text-sm text-[var(--text-muted)]">Loading Privy…</p>;
@@ -127,6 +161,44 @@ function ClaimDashboardInner() {
                   No pre-generated social wallet found for this handle yet.
                 </p>
               )}
+
+              {data.registryMatch ? (
+                <div className="mt-4 space-y-3">
+                  <button
+                    type="button"
+                    onClick={() => handleExportKey().catch(() => undefined)}
+                    disabled={exporting}
+                    className="home-btn home-btn-secondary"
+                  >
+                    {exporting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <KeyRound className="h-4 w-4" />
+                    )}
+                    Export private key
+                  </button>
+                  {exportError ? (
+                    <p className="text-sm text-red-300">{exportError}</p>
+                  ) : null}
+                  {exportedKey ? (
+                    <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
+                      <p className="text-xs text-amber-200">
+                        Never share this key. Import it into MetaMask or another wallet to claim
+                        fees on-chain.
+                      </p>
+                      <p className="mt-2 break-all font-mono text-xs text-white">{exportedKey}</p>
+                      <button
+                        type="button"
+                        onClick={() => copyExportedKey().catch(() => undefined)}
+                        className="mt-2 inline-flex items-center gap-1 text-xs text-[var(--accent)] hover:underline"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                        {copied ? 'Copied' : 'Copy key'}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
 
             {data.launches.length === 0 ? (
@@ -142,14 +214,7 @@ function ClaimDashboardInner() {
             ) : (
               <div className="grid gap-3">
                 {data.launches.map((launch) => (
-                  <LaunchClaimCard
-                    key={launch.token}
-                    launch={launch}
-                    socialPlatform={data.socialPlatform}
-                    socialHandle={data.socialHandle}
-                    onClaimRecorded={() => refetch()}
-                    getAccessToken={getAccessToken}
-                  />
+                  <LaunchClaimCard key={launch.token} launch={launch} />
                 ))}
               </div>
             )}
@@ -158,7 +223,8 @@ function ClaimDashboardInner() {
       </div>
 
       <p className="text-xs text-[var(--text-subtle)]">
-        Only tokens launched through PonsShare are listed here.{' '}
+        Claim status syncs automatically from on-chain events. Only tokens launched through
+        PonsShare are listed here.{' '}
         <Link href="/launch" className="text-[var(--accent)] hover:underline">
           Launch a token
         </Link>
@@ -169,10 +235,6 @@ function ClaimDashboardInner() {
 
 function LaunchClaimCard({
   launch,
-  socialPlatform,
-  socialHandle,
-  onClaimRecorded,
-  getAccessToken,
 }: {
   launch: {
     token: string;
@@ -181,25 +243,11 @@ function LaunchClaimCard({
     logo: string;
     transactionHash: string;
     feeClaimed?: boolean;
+    feeClaimedAt?: string | null;
     feeClaimTxHash?: string | null;
   };
-  socialPlatform: 'twitter' | 'github' | null;
-  socialHandle: string | null;
-  onClaimRecorded: () => void;
-  getAccessToken: () => Promise<string | null>;
 }) {
-  async function markClaimed() {
-    const token = await getAccessToken();
-    if (!token || !socialPlatform || !socialHandle) return;
-    const txHash = window.prompt('Optional: paste the claim transaction hash');
-    await recordFeeClaim(token, {
-      token: launch.token,
-      platform: socialPlatform,
-      handle: socialHandle,
-      claimTransactionHash: txHash?.trim() || undefined,
-    });
-    onClaimRecorded();
-  }
+  const detailsHref = `/launchpad/${launch.token}`;
 
   return (
     <article className="flex items-center justify-between gap-4 rounded-xl border border-white/[0.08] bg-[rgba(255,255,255,0.03)] p-4">
@@ -219,8 +267,15 @@ function LaunchClaimCard({
           <p className="font-medium text-white">{launch.name}</p>
           <p className="text-sm text-[var(--text-muted)]">{launch.symbol}</p>
           {launch.feeClaimed ? (
-            <p className="mt-1 text-xs text-[var(--accent)]">Fees marked as claimed</p>
-          ) : null}
+            <p className="mt-1 text-xs text-[var(--accent)]">
+              Fees claimed on-chain
+              {launch.feeClaimedAt
+                ? ` · ${new Date(launch.feeClaimedAt).toLocaleDateString()}`
+                : ''}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-[var(--text-subtle)]">Fees not claimed yet</p>
+          )}
         </div>
       </div>
       <div className="text-right">
@@ -228,23 +283,12 @@ function LaunchClaimCard({
           {shortAddress(launch.token, 6)}
         </p>
         <div className="mt-1 flex flex-wrap justify-end gap-2">
-          <a
-            href={ponsTokenUrl(launch.token)}
-            target="_blank"
-            rel="noreferrer"
+          <Link
+            href={detailsHref}
             className="inline-flex items-center gap-1 text-sm text-[var(--accent)] hover:underline"
           >
-            Claim on pons <ExternalLink className="h-3.5 w-3.5" />
-          </a>
-          {!launch.feeClaimed && socialPlatform && socialHandle ? (
-            <button
-              type="button"
-              onClick={() => markClaimed().catch(() => undefined)}
-              className="text-sm text-[var(--text-muted)] hover:text-white"
-            >
-              Mark claimed
-            </button>
-          ) : null}
+            Claim fees <ExternalLink className="h-3.5 w-3.5" />
+          </Link>
           {launch.feeClaimTxHash ? (
             <a
               href={txUrl(launch.feeClaimTxHash as `0x${string}`)}

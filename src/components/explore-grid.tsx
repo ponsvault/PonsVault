@@ -5,6 +5,7 @@ import { ArrowUpRight } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
+import { FeeShareBadge } from '@/components/fee-share-badge';
 import { fetchRecentLaunches } from '@/lib/pons/api';
 import { cn, formatUsd, ipfsToGateway } from '@/lib/utils';
 
@@ -84,6 +85,18 @@ export function ExploreGrid() {
               </div>
 
               <p className="mt-3 line-clamp-2 text-sm text-zinc-500">{launch.description}</p>
+
+              {launch.feeWallet ? (
+                <FeeShareBadge
+                  className="fee-share-badge mt-3"
+                  info={{
+                    feeWallet: launch.feeWallet,
+                    deployer: launch.deployer,
+                    feeSharePlatform: launch.feeSharePlatform,
+                    feeShareHandle: launch.feeShareHandle,
+                  }}
+                />
+              ) : null}
 
               <dl className="explore-card-stats">
                 <div>

@@ -14,6 +14,12 @@ export async function GET(request: Request) {
       description: launch.description,
       logo: launch.logo,
       deployer: launch.deployer,
+      feeWallet: launch.feeWallet,
+      feeSharePlatform:
+        launch.feeSharePlatform === 'twitter' || launch.feeSharePlatform === 'github'
+          ? launch.feeSharePlatform
+          : null,
+      feeShareHandle: launch.feeShareHandle ?? null,
       launchedAt: launch.launchedAt,
       transactionHash: launch.transactionHash,
     }));

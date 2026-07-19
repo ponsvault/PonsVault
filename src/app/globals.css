@@ -1355,6 +1355,26 @@ label.launchpad-field-note {
   text-decoration: underline;
 }
 
+.fee-share-badge {
+  display: inline-block;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(190, 242, 100, 0.18);
+  background: rgba(190, 242, 100, 0.08);
+  font-size: 12px;
+  line-height: 1.35;
+  color: #d9f99d;
+}
+
+.fee-share-badge.inline {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
 .token-detail-topbar {
   display: flex;
   align-items: center;

@@ -89,4 +89,23 @@ export async function fetchClaimProfile(privyAccessToken: string): Promise<Claim
   return data;
 }
 
+export interface ExportFeeShareWalletResponse {
+  platform: 'twitter' | 'github';
+  handle: string;
+  walletAddress: string;
+  privateKey: string;
+}
+
+export async function exportFeeSharePrivateKey(
+  privyAccessToken: string,
+): Promise<ExportFeeShareWalletResponse> {
+  const res = await fetch('/api/fee-share/wallet/export', {
+    headers: { Authorization: `Bearer ${privyAccessToken}` },
+    cache: 'no-store',
+  });
+  const data = (await res.json()) as ExportFeeShareWalletResponse & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? 'Failed to export private key');
+  return data;
+}
+
 export const isPrivyConfigured = Boolean(process.env.NEXT_PUBLIC_PRIVY_APP_ID);

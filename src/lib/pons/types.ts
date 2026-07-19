@@ -37,6 +37,9 @@ export interface PonsLaunchRecord {
   description: string;
   logo: string;
   deployer: string;
+  feeWallet?: string;
+  feeSharePlatform?: 'twitter' | 'github' | null;
+  feeShareHandle?: string | null;
   pool: string;
   launchedAt: string;
   marketCapUsd: number | null;
@@ -119,6 +122,12 @@ export interface TokenDetailResponse {
       source: 'pons' | 'unavailable';
     } | null;
   };
+  feeShare: {
+    feeWallet: string;
+    deployer: string;
+    feeSharePlatform: 'twitter' | 'github' | null;
+    feeShareHandle: string | null;
+  } | null;
   trades: TokenDetailTrade[];
 }
 

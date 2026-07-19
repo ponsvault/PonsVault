@@ -104,6 +104,30 @@ export async function recordPonsShareLaunch(
   return launch;
 }
 
+export async function getPonsShareLaunchByToken(
+  token: string,
+): Promise<PonsShareLaunchRecord | null> {
+  const normalized = token.toLowerCase();
+
+  if (isSupabaseConfigured()) {
+    const { data, error } = await supabase
+      .from('ponsshare_launches')
+      .select(
+        'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at',
+      )
+      .eq('token', normalized)
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return data ? rowToLaunch(data as LaunchRow) : null;
+  }
+
+  const registry = await ensureRegistry();
+  return (
+    registry.launches.find((item) => item.token.toLowerCase() === normalized) ?? null
+  );
+}
+
 export async function listPonsShareLaunches(limit = 100): Promise<PonsShareLaunchRecord[]> {
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase

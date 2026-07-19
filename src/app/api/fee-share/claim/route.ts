@@ -2,6 +2,7 @@ import { PrivyClient as PrivyAuthClient } from '@privy-io/server-auth';
 import { NextResponse } from 'next/server';
 
 import { listFeeClaimsForTokens } from '@/lib/fee-share/claims';
+import { syncFeeClaimsForWallet } from '@/lib/fee-share/claim-sync';
 import { linkFeeWalletToPrivyUser } from '@/lib/fee-share/privy-link';
 import { getFeeShareWallet } from '@/lib/fee-share/registry';
 import {
@@ -114,6 +115,15 @@ export async function GET(request: Request) {
     const launchList = [...merged.values()].sort(
       (a, b) => Date.parse(b.launchedAt) - Date.parse(a.launchedAt),
     );
+
+    if (registry?.id) {
+      await syncFeeClaimsForWallet({
+        tokens: launchList.map((launch) => launch.token),
+        walletAddress,
+        feeWalletId: registry.id,
+        privyUserId: user.id,
+      });
+    }
 
     const feeClaims = await listFeeClaimsForTokens(launchList.map((launch) => launch.token));
     const claimsByToken = new Map(

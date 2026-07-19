@@ -7,6 +7,7 @@ import Link from 'next/link';
 import type { Address } from 'viem';
 
 import { TokenCreatorFeesPanel } from '@/components/token-creator-fees-panel';
+import { FeeShareBadge } from '@/components/fee-share-badge';
 import { TokenPriceChart } from '@/components/token-price-chart';
 import { fetchTokenDetail } from '@/lib/pons/api';
 import { txUrl } from '@/lib/pons/launch';
@@ -112,6 +113,9 @@ export function TokenDetail({ token }: TokenDetailProps) {
                   </span>
                 </div>
                 <p className="token-detail-symbol">${data.metadata.symbol}</p>
+                {data.feeShare ? (
+                  <FeeShareBadge className="fee-share-badge mt-2" info={data.feeShare} />
+                ) : null}
               </div>
             </div>
 
@@ -257,6 +261,14 @@ export function TokenDetail({ token }: TokenDetailProps) {
                       </a>
                     </dd>
                   </div>
+                  {data.feeShare ? (
+                    <div>
+                      <dt>Fee sharing</dt>
+                      <dd>
+                        <FeeShareBadge info={data.feeShare} className="fee-share-badge inline" />
+                      </dd>
+                    </div>
+                  ) : null}
                   <div>
                     <dt>Dev buy</dt>
                     <dd>{data.launch.initialBuyEth || '0'} ETH</dd>
