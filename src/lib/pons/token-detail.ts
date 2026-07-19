@@ -1,6 +1,7 @@
 import { formatEther, type Address } from 'viem';
 
 import { PONS_TOTAL_SUPPLY } from './constants';
+import { fetchCreatorFees } from './creator-fees';
 import { robinhoodPublicClient } from './client';
 import { resolveLaunchedToken } from './factory';
 import { readPoolMarketSnapshot } from './pricing';
@@ -72,6 +73,27 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
     creatorPayout: deployerAddress,
   }));
 
+  const [creatorFees, locker] = await Promise.all([
+    fetchCreatorFees(token).catch(() => null),
+    factory
+      ? robinhoodPublicClient
+          .readContract({
+            address: factory,
+            abi: [
+              {
+                type: 'function',
+                name: 'locker',
+                stateMutability: 'view',
+                inputs: [],
+                outputs: [{ type: 'address' }],
+              },
+            ],
+            functionName: 'locker',
+          })
+          .catch(() => null)
+      : Promise.resolve(null),
+  ]);
+
   return {
     token,
     metadata,
@@ -109,6 +131,18 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
       creatorSharePercent: feeRouting.creatorSharePercent,
       feeRedirect: feeRouting.feeRedirect,
       creatorPayout: feeRouting.creatorPayout,
+      locker,
+      creatorRewards: creatorFees
+        ? {
+            grossToken: creatorFees.grossToken,
+            grossWeth: creatorFees.grossWeth,
+            creatorToken: creatorFees.creatorToken,
+            creatorWeth: creatorFees.creatorWeth,
+            payoutAddress: creatorFees.payoutAddress,
+            claimable: creatorFees.claimable,
+            source: creatorFees.source,
+          }
+        : null,
     },
     trades: tradesWithUsd.map((trade) => ({
       ...trade,

@@ -27,6 +27,8 @@ export const PONS_LOCKER_ABI = parseAbi([
   'function tokenProtocolFeeShares(address token) view returns (uint256)',
   'function feeRedirects(address token) view returns (address)',
   'function protocolFeeRecipient() view returns (address)',
+  'function collectFees(address token) returns (uint256 amount0, uint256 amount1)',
+  'function setFeeRedirect(address token, address newFeeWallet)',
 ]);
 
 export interface TokenOnchainMetadata {

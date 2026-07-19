@@ -108,6 +108,16 @@ export interface TokenDetailResponse {
     creatorSharePercent: number;
     feeRedirect: string | null;
     creatorPayout: string;
+    locker: string | null;
+    creatorRewards: {
+      grossToken: string;
+      grossWeth: string;
+      creatorToken: string;
+      creatorWeth: string;
+      payoutAddress: string;
+      claimable: boolean;
+      source: 'pons' | 'unavailable';
+    } | null;
   };
   trades: TokenDetailTrade[];
 }

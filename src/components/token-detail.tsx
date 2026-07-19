@@ -1,15 +1,15 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ExternalLink, Globe, Loader2 } from 'lucide-react';
+import { ChevronLeft, Globe, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import type { Address } from 'viem';
 
+import { TokenCreatorFeesPanel } from '@/components/token-creator-fees-panel';
 import { TokenPriceChart } from '@/components/token-price-chart';
-import { TokenTradePanel } from '@/components/token-trade-panel';
 import { fetchTokenDetail } from '@/lib/pons/api';
-import { ponsTokenUrl, txUrl } from '@/lib/pons/launch';
+import { txUrl } from '@/lib/pons/launch';
 import {
   cn,
   explorerAddressUrl,
@@ -82,18 +82,9 @@ export function TokenDetail({ token }: TokenDetailProps) {
           <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
           <span>Back</span>
         </Link>
-        <a
-          href={ponsTokenUrl(token)}
-          target="_blank"
-          rel="noreferrer"
-          className="token-detail-external"
-        >
-          Open on pons
-          <ExternalLink className="h-3.5 w-3.5" />
-        </a>
       </div>
 
-      <div className="token-detail-shell">
+      <div className="token-detail-shell token-detail-shell-single">
         <section className="token-detail-main">
           <header className="token-detail-header">
             <div className="token-detail-identity">
@@ -154,6 +145,8 @@ export function TokenDetail({ token }: TokenDetailProps) {
               />
             </div>
           </div>
+
+          <TokenCreatorFeesPanel token={token} detail={data} onClaimed={() => refetch()} />
 
           <TokenPriceChart trades={data.trades} currentPriceUsd={data.market.priceUsd} />
 
@@ -273,10 +266,6 @@ export function TokenDetail({ token }: TokenDetailProps) {
             </dl>
           </section>
         </section>
-
-        <aside className="token-detail-sidebar">
-          <TokenTradePanel token={token} symbol={data.metadata.symbol} detail={data} />
-        </aside>
       </div>
     </div>
   );

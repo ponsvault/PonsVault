@@ -1,8 +1,9 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ExternalLink, ImageIcon, Loader2 } from 'lucide-react';
+import { ImageIcon, Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import {
   useAccount,
@@ -42,8 +43,6 @@ import {
   isValidEthAddress,
   isValidXHandle,
   normalizeEthAddress,
-  ponsTokenUrl,
-  txUrl,
   validateLaunchInput,
 } from '@/lib/pons/launch';
 import { computeMaxDevBuyWei } from '@/lib/pons/max-dev-buy';
@@ -92,13 +91,10 @@ export function LaunchForm() {
   const [form, setForm] = useState<LaunchFormInput>(emptyForm);
   const [previewUrl, setPreviewUrl] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState<{
-    token: string;
-    hash: `0x${string}`;
-  } | null>(null);
   const [isLaunching, setIsLaunching] = useState(false);
   const [statusText, setStatusText] = useState('');
   const [ipfsAccepted, setIpfsAccepted] = useState(false);
+  const router = useRouter();
 
   const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['launchpad-status'],
@@ -250,7 +246,6 @@ export function LaunchForm() {
 
   async function handleLaunch() {
     setError('');
-    setSuccess(null);
 
     if (!isConnected || !address || !walletClient || !status) {
       setError('Connect your wallet first.');
@@ -353,10 +348,9 @@ export function LaunchForm() {
         }).catch(() => undefined);
       }
 
-      setSuccess({ token, hash });
-      setForm(emptyForm);
-      setPreviewUrl('');
-      setIpfsAccepted(false);
+      setStatusText('Opening token page…');
+      router.push(`/launchpad/${token}`);
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Launch failed');
     } finally {
@@ -709,20 +703,6 @@ export function LaunchForm() {
           </div>
 
           {error ? <div className="launchpad-alert">{error}</div> : null}
-
-          {success ? (
-            <div className="launchpad-success">
-              <p className="font-medium">Token launched successfully.</p>
-              <div className="mt-2 flex flex-wrap gap-3">
-                <a className="link" href={ponsTokenUrl(success.token)} target="_blank" rel="noreferrer">
-                  View on pons <ExternalLink className="inline h-3.5 w-3.5" />
-                </a>
-                <a className="link" href={txUrl(success.hash)} target="_blank" rel="noreferrer">
-                  Transaction <ExternalLink className="inline h-3.5 w-3.5" />
-                </a>
-              </div>
-            </div>
-          ) : null}
         </div>
 
         <footer className="launchpad-create-actions">
