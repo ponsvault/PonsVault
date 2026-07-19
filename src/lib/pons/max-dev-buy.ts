@@ -5,7 +5,7 @@ import type { PonsLaunchpadStatus } from './types';
 
 const Q192 = 2n ** 192n;
 
-/** Max developer buy in wei — matches pons.family bonding-curve wallet cap math. */
+/** Max developer buy in wei — matches pons launch wallet cap math. */
 export function computeMaxDevBuyWei(status: PonsLaunchpadStatus): bigint {
   if (!status.totalSupply || status.initialTick == null) return 0n;
 

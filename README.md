@@ -1,6 +1,6 @@
 # PonsShare
 
-Launch fixed-supply tokens on **Robinhood Chain** through [pons.family](https://pons.family) — with optional **social fee sharing** via Privy wallets tied to X handles.
+Launch fixed-supply tokens on **Robinhood Chain** through [pons](https://ponsfamily.com) — with optional **social fee sharing** via Privy wallets tied to X handles.
 
 PonsShare is a non-custodial launch layer. Your wallet signs every transaction. We never custody keys or funds.
 
@@ -89,4 +89,4 @@ Without Supabase, launches and fee-share wallets fall back to local JSON under `
 
 ## Disclaimer
 
-Unofficial layer on pons.family. Not affiliated with Pons Labs. Tokens are volatile; transactions may be irreversible.
+Unofficial layer on pons. Not affiliated with Pons Labs. Tokens are volatile; transactions may be irreversible.

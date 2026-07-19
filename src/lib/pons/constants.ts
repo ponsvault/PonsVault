@@ -1,4 +1,4 @@
-export const PONS_API_BASE = 'https://pons.family';
+export const PONS_API_BASE = 'https://ponsfamily.com';
 
 export const PONS_CHAIN_ID = 4663;
 

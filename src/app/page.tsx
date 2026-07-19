@@ -25,7 +25,7 @@ export default function HomePage() {
             <span className="home-title-accent"> Share fees with any X account.</span>
           </h1>
           <p className="home-lead">
-            PonsShare is a non-custodial launch layer for pons.family — create tokens from your
+            PonsShare is a non-custodial launch layer for pons — create tokens from your
             wallet, optionally route 70% creator fees to a Privy wallet tied to an X handle, and
             let them claim later.
           </p>
@@ -71,7 +71,7 @@ export default function HomePage() {
                 Everything pons launches need — plus social fee routing.
               </h2>
               <p className="home-section-body">
-                Use the same factory, metadata flow, and bonding curve as pons.family. Add an
+                Use the same factory, metadata flow, and pool as pons. Add an
                 optional fee-share wallet for collaborators, promoters, or creators who should
                 earn on launch day without connecting a wallet first.
               </p>
@@ -183,7 +183,7 @@ export default function HomePage() {
           <div>
             <p className="home-footer-brand">PonsShare</p>
             <p className="home-footer-note">
-              Unofficial layer on pons.family. Not affiliated with Pons Labs. Transactions are
+              Unofficial layer on pons. Not affiliated with Pons Labs. Transactions are
               wallet-signed and may be irreversible.
             </p>
           </div>
@@ -191,8 +191,8 @@ export default function HomePage() {
             <Link href="/launch">Launch</Link>
             <Link href="/explore">Explore</Link>
             <Link href="/claim">Claim</Link>
-            <a href="https://pons.family" target="_blank" rel="noreferrer">
-              pons.family
+            <a href="https://ponsfamily.com" target="_blank" rel="noreferrer">
+              pons
             </a>
           </nav>
         </div>

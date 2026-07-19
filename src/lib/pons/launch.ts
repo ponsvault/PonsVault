@@ -290,7 +290,7 @@ export function formatLaunchSummary(
 }
 
 export function ponsTokenUrl(token: string): string {
-  return `https://pons.family/launchpad/${token}`;
+  return `https://ponsfamily.com/launchpad/${token}`;
 }
 
 export function txUrl(hash: Hash): string {

@@ -1,5 +1,4 @@
 import type { PonsLaunchpadStatus, PonsLaunchRecord } from './types';
-import { PONS_API_BASE } from './constants';
 import { readResponseJson } from './pons-http';
 
 async function readJson<T>(res: Response): Promise<T> {
@@ -31,18 +30,6 @@ export async function fetchLaunchpadStatus(): Promise<PonsLaunchpadStatus> {
 export async function uploadTokenImage(file: File): Promise<string> {
   const form = new FormData();
   form.append('image', file);
-
-  // Prefer browser-direct upload to pons (same as pons.family launchpad).
-  try {
-    const direct = await fetch(`${PONS_API_BASE}/api/ipfs/image`, {
-      method: 'POST',
-      body: form,
-    });
-    const data = await readUploadJson(direct);
-    return data.uri;
-  } catch {
-    // Fall back to our server proxy when CORS or network blocks the browser call.
-  }
 
   const res = await fetch('/api/pons/ipfs', { method: 'POST', body: form });
   const data = await readUploadJson(res);

@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'PonsShare — Launch on pons, share creator fees',
   description:
-    'Non-custodial launch layer for pons.family on Robinhood Chain. Launch tokens and route creator fees to X accounts.',
+    'Non-custodial launch layer for pons on Robinhood Chain. Launch tokens and route creator fees to X accounts.',
 };
 
 export default function RootLayout({

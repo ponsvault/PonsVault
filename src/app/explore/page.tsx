@@ -14,7 +14,7 @@ export default function ExplorePage() {
         <p className="text-sm uppercase tracking-[0.2em] text-lime-300/80">Explore</p>
         <h1 className="mt-2 text-3xl font-semibold text-white">PonsShare launches</h1>
         <p className="mt-2 max-w-2xl text-sm text-zinc-400">
-          Only tokens created through this app appear here — not the full pons.family feed.
+          Only tokens created through this app appear here — not the full pons feed.
         </p>
       </div>
       <ExploreGrid />

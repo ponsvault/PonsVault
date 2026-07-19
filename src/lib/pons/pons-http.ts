@@ -1,7 +1,7 @@
 import { PONS_API_BASE } from './constants';
 
 export class PonsApiBlockedError extends Error {
-  constructor(message = 'pons.family API blocked by Cloudflare. Using on-chain fallback.') {
+  constructor(message = 'pons API blocked by Cloudflare. Using on-chain fallback.') {
     super(message);
     this.name = 'PonsApiBlockedError';
   }
@@ -40,13 +40,19 @@ const BROWSER_HEADERS: HeadersInit = {
     'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
 };
 
-export async function fetchPonsApi(path: string, init?: RequestInit): Promise<Response> {
-  return fetch(`${PONS_API_BASE}${path}`, {
-    ...init,
+export async function fetchPonsApi(
+  path: string,
+  init?: RequestInit & { baseUrl?: string },
+): Promise<Response> {
+  const baseUrl = init?.baseUrl?.replace(/\/$/, '') || PONS_API_BASE;
+  const { baseUrl: _baseUrl, ...requestInit } = init ?? {};
+
+  return fetch(`${baseUrl}${path}`, {
+    ...requestInit,
     cache: 'no-store',
     headers: {
       ...BROWSER_HEADERS,
-      ...(init?.headers ?? {}),
+      ...(requestInit.headers ?? {}),
     },
   });
 }
