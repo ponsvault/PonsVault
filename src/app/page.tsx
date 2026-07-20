@@ -10,6 +10,8 @@ import {
   Wallet,
 } from 'lucide-react';
 
+import { PONSSHARE_X_URL, XLogo } from '@/components/x-social-link';
+
 export default function HomePage() {
   return (
     <main className="home-page">
@@ -151,7 +153,7 @@ export default function HomePage() {
             <Feature
               icon={Users}
               title="Social fee split"
-              body="BNBShare-style routing for pons — assign feeWallet to an X-linked Privy wallet at launch time."
+              body="Assign creator fees to an X-linked Privy wallet at launch time — recipients can claim later without connecting a wallet first."
             />
             <Feature
               icon={Shield}
@@ -193,6 +195,16 @@ export default function HomePage() {
             <Link href="/claim">Claim</Link>
             <a href="https://ponsfamily.com" target="_blank" rel="noreferrer">
               pons
+            </a>
+            <a
+              href={PONSSHARE_X_URL}
+              target="_blank"
+              rel="noreferrer"
+              className="home-footer-x-link"
+              aria-label="PonsShare on X"
+            >
+              <XLogo className="home-footer-x-icon" />
+              @ponsshare
             </a>
           </nav>
         </div>

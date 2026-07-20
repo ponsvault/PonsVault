@@ -71,17 +71,31 @@ body {
   gap: 10px;
 }
 
-.nav-logo {
-  display: grid;
+.social-x-link {
+  display: inline-grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-size: 14px;
-  font-weight: 800;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-muted);
   text-decoration: none;
+  transition:
+    color 0.15s ease,
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+
+.social-x-link:hover {
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.social-x-icon {
+  width: 16px;
+  height: 16px;
 }
 
 .nav-product-links {
@@ -1266,6 +1280,17 @@ label.launchpad-field-note {
 
 .home-footer-links a:hover {
   color: var(--text-primary);
+}
+
+.home-footer-x-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.home-footer-x-icon {
+  width: 14px;
+  height: 14px;
 }
 
 .nav-brand-text {

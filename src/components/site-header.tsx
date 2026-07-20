@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { ConnectButton } from '@/components/connect-button';
+import { XSocialLink } from '@/components/x-social-link';
 import { cn } from '@/lib/utils';
 
 const links = [
@@ -20,9 +21,6 @@ export function SiteHeader() {
     <header className="nav">
       <div className="nav-inner">
         <div className="nav-left">
-          <Link href="/" className="nav-logo" aria-label="PonsShare home">
-            P
-          </Link>
           <Link href="/" className="nav-brand-text">
             PonsShare
           </Link>
@@ -46,6 +44,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="nav-right">
+          <XSocialLink />
           <ConnectButton />
         </div>
       </div>
