@@ -193,6 +193,7 @@ export default function HomePage() {
             <Link href="/launch">Launch</Link>
             <Link href="/explore">Explore</Link>
             <Link href="/claim">Claim</Link>
+            <Link href="/docs">Docs</Link>
             <a href="https://ponsfamily.com" target="_blank" rel="noreferrer">
               pons
             </a>

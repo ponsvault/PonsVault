@@ -12,6 +12,7 @@ const links = [
   { href: '/explore', label: 'Explore' },
   { href: '/launch', label: 'Launch' },
   { href: '/claim', label: 'Claim' },
+  { href: '/docs', label: 'Docs' },
 ];
 
 export function SiteHeader() {
