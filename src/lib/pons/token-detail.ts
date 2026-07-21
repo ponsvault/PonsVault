@@ -1,6 +1,8 @@
 import { formatEther, type Address } from 'viem';
 
 import { getPonsShareLaunchByToken } from '@/lib/launch-registry/store';
+import { listClaimedFeeShareWalletKeys } from '@/lib/fee-share/registry';
+import { feeShareWalletKey } from '@/lib/fee-share/social';
 import type { SocialPlatform } from '@/lib/fee-share/types';
 import { PONS_TOTAL_SUPPLY } from './constants';
 import { fetchCreatorFees } from './creator-fees';
@@ -82,7 +84,7 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
     creatorPayout: deployerAddress,
   }));
 
-  const [creatorFees, locker, launchRecord] = await Promise.all([
+  const [creatorFees, locker, launchRecord, claimedWalletKeys] = await Promise.all([
     fetchCreatorFees(token).catch(() => null),
     factory
       ? robinhoodPublicClient
@@ -102,7 +104,15 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
           .catch(() => null)
       : Promise.resolve(null),
     getPonsShareLaunchByToken(token).catch(() => null),
+    listClaimedFeeShareWalletKeys().catch(() => new Set<string>()),
   ]);
+
+  const walletClaimed =
+    launchRecord?.feeSharePlatform && launchRecord.feeShareHandle
+      ? claimedWalletKeys.has(
+          feeShareWalletKey(launchRecord.feeSharePlatform, launchRecord.feeShareHandle),
+        )
+      : false;
 
   const feeShare = launchRecord
     ? {
@@ -110,6 +120,7 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
         deployer: launchRecord.deployer,
         feeSharePlatform: narrowFeeSharePlatform(launchRecord.feeSharePlatform),
         feeShareHandle: launchRecord.feeShareHandle ?? null,
+        walletClaimed,
       }
     : feeRouting.creatorPayout.toLowerCase() !== deployerAddress.toLowerCase()
       ? {
@@ -117,6 +128,7 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
           deployer: deployerAddress,
           feeSharePlatform: null,
           feeShareHandle: null,
+          walletClaimed: false,
         }
       : null;
 

@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server';
 
 import { enrichLaunchRecords } from '@/lib/pons/explore-enrichment';
 import { listPonsShareLaunches } from '@/lib/launch-registry/store';
+import { listClaimedFeeShareWalletKeys } from '@/lib/fee-share/registry';
+import { feeShareWalletKey } from '@/lib/fee-share/social';
 
 export async function GET(request: Request) {
   try {
     const limit = Number(new URL(request.url).searchParams.get('limit') ?? '48');
-    const launches = await listPonsShareLaunches(Number.isFinite(limit) ? limit : 48);
+    const [launches, claimedWalletKeys] = await Promise.all([
+      listPonsShareLaunches(Number.isFinite(limit) ? limit : 48),
+      listClaimedFeeShareWalletKeys().catch(() => new Set<string>()),
+    ]);
     const base = launches.map((launch) => ({
       token: launch.token,
       name: launch.name,
@@ -20,6 +25,12 @@ export async function GET(request: Request) {
           ? launch.feeSharePlatform
           : null,
       feeShareHandle: launch.feeShareHandle ?? null,
+      feeWalletClaimed:
+        launch.feeSharePlatform && launch.feeShareHandle
+          ? claimedWalletKeys.has(
+              feeShareWalletKey(launch.feeSharePlatform, launch.feeShareHandle),
+            )
+          : false,
       launchedAt: launch.launchedAt,
       transactionHash: launch.transactionHash,
     }));

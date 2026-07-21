@@ -7,6 +7,7 @@ export interface FeeShareInfo {
   deployer: string;
   feeSharePlatform?: SocialPlatform | null;
   feeShareHandle?: string | null;
+  walletClaimed?: boolean;
 }
 
 export function hasFeeShareConfig(info: FeeShareInfo): boolean {
@@ -31,6 +32,14 @@ export function describeFeeShare(info: FeeShareInfo): string {
   }
 
   return 'Fees go to launcher wallet';
+}
+
+export function describeWalletClaimedBy(info: FeeShareInfo): string | null {
+  if (!info.walletClaimed || !info.feeSharePlatform || !info.feeShareHandle) {
+    return null;
+  }
+
+  return `Wallet claimed by ${displayHandle(info.feeSharePlatform, info.feeShareHandle)}`;
 }
 
 export function describeFeeShareShort(info: FeeShareInfo): string {

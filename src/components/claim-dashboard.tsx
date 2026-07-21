@@ -7,9 +7,22 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 
-import { exportFeeSharePrivateKey, fetchClaimProfile, isPrivyConfigured } from '@/lib/fee-share/api';
+import {
+  exportFeeSharePrivateKey,
+  fetchClaimProfile,
+  isPrivyConfigured,
+  type ExportFeeShareWalletResponse,
+} from '@/lib/fee-share/api';
+import { displayHandle } from '@/lib/fee-share/social';
 import { txUrl } from '@/lib/pons/launch';
 import { shortAddress, ipfsToGateway } from '@/lib/utils';
+
+function walletClaimedByLabel(result: {
+  platform: 'twitter' | 'github';
+  handle: string;
+}): string {
+  return `Wallet claimed by ${displayHandle(result.platform, result.handle)}`;
+}
 
 export function ClaimDashboard() {
   if (!isPrivyConfigured) {
@@ -30,7 +43,7 @@ export function ClaimDashboard() {
 function ClaimDashboardInner() {
   const { ready, authenticated, login, logout, getAccessToken, user } = usePrivy();
   const [exportError, setExportError] = useState('');
-  const [exportedKey, setExportedKey] = useState<string | null>(null);
+  const [exportResult, setExportResult] = useState<ExportFeeShareWalletResponse | null>(null);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
@@ -50,7 +63,7 @@ function ClaimDashboardInner() {
   async function confirmExportKey() {
     setExportConfirmOpen(false);
     setExportError('');
-    setExportedKey(null);
+    setExportResult(null);
     setCopied(false);
     setExporting(true);
 
@@ -58,7 +71,7 @@ function ClaimDashboardInner() {
       const token = await getAccessToken();
       if (!token) throw new Error('Could not read Privy access token.');
       const result = await exportFeeSharePrivateKey(token);
-      setExportedKey(result.privateKey);
+      setExportResult(result);
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'Failed to export private key');
     } finally {
@@ -78,8 +91,8 @@ function ClaimDashboardInner() {
   }, [exportConfirmOpen]);
 
   async function copyExportedKey() {
-    if (!exportedKey) return;
-    await navigator.clipboard.writeText(exportedKey);
+    if (!exportResult?.privateKey) return;
+    await navigator.clipboard.writeText(exportResult.privateKey);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 2000);
   }
@@ -116,6 +129,14 @@ function ClaimDashboardInner() {
     : githubUsername
       ? `${githubUsername} on GitHub`
       : 'Privy connected';
+
+  const feeShareClaimLabel =
+    data?.socialPlatform && data.socialHandle
+      ? walletClaimedByLabel({
+          platform: data.socialPlatform,
+          handle: data.socialHandle,
+        })
+      : null;
 
   return (
     <section className="space-y-6">
@@ -188,13 +209,21 @@ function ClaimDashboardInner() {
                   {exportError ? (
                     <p className="text-sm text-red-300">{exportError}</p>
                   ) : null}
-                  {exportedKey ? (
+                  {exportResult ? (
                     <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 p-3">
-                      <p className="text-xs text-amber-200">
+                      <p className="text-sm font-medium text-[var(--accent)]">
+                        {walletClaimedByLabel(exportResult)}
+                      </p>
+                      <p className="mt-1 font-mono text-xs text-[var(--text-muted)]">
+                        {exportResult.walletAddress}
+                      </p>
+                      <p className="mt-3 text-xs text-amber-200">
                         Never share this key. Import it into MetaMask or another wallet to claim
                         fees on-chain.
                       </p>
-                      <p className="mt-2 break-all font-mono text-xs text-white">{exportedKey}</p>
+                      <p className="mt-2 break-all font-mono text-xs text-white">
+                        {exportResult.privateKey}
+                      </p>
                       <button
                         type="button"
                         onClick={() => copyExportedKey().catch(() => undefined)}
@@ -252,7 +281,8 @@ function ClaimDashboardInner() {
                   Export private key?
                 </h2>
                 <p className="app-dialog-subtitle">
-                  This reveals the full private key for your fee-share wallet.
+                  {feeShareClaimLabel ??
+                    'This reveals the full private key for your fee-share wallet.'}
                 </p>
               </div>
               <button
@@ -266,7 +296,13 @@ function ClaimDashboardInner() {
             </div>
 
             <div className="app-dialog-body">
-              <p>
+              {feeShareClaimLabel && data?.walletAddress ? (
+                <p>
+                  You are exporting the wallet linked to this fee-share handle. Associated address:{' '}
+                  <span className="font-mono text-white">{data.walletAddress}</span>
+                </p>
+              ) : null}
+              <p className={feeShareClaimLabel ? 'mt-3' : undefined}>
                 Anyone with this key can control the wallet and move its funds, including creator
                 fees and any tokens assigned to it at launch.
               </p>

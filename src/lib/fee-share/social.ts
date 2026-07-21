@@ -4,6 +4,10 @@ export function normalizeHandle(handle: string): string {
   return handle.trim().replace(/^@/, '').toLowerCase();
 }
 
+export function feeShareWalletKey(platform: SocialPlatform, handle: string): string {
+  return `${platform}:${normalizeHandle(handle)}`;
+}
+
 export function toCustomUserId(platform: SocialPlatform, handle: string): string {
   return `${platform}:${normalizeHandle(handle)}`;
 }

@@ -1424,6 +1424,37 @@ label.launchpad-field-note {
   font-size: inherit;
 }
 
+.fee-share-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.fee-share-badges.inline {
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.fee-wallet-claimed-badge {
+  display: inline-block;
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.22);
+  background: rgba(125, 211, 252, 0.08);
+  font-size: 12px;
+  line-height: 1.35;
+  color: #bae6fd;
+}
+
+.fee-share-badges.inline .fee-wallet-claimed-badge {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #bae6fd;
+  font-size: inherit;
+}
+
 .token-detail-topbar {
   display: flex;
   align-items: center;

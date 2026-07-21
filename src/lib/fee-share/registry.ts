@@ -157,6 +157,28 @@ export async function upsertFeeShareWallet(
   return upsertFeeShareWalletToJson(record);
 }
 
+export async function listClaimedFeeShareWalletKeys(): Promise<Set<string>> {
+  if (isSupabaseConfigured()) {
+    const { data, error } = await supabase
+      .from('fee_share_wallets')
+      .select('platform, handle')
+      .not('linked_at', 'is', null);
+
+    if (error) throw new Error(error.message);
+
+    return new Set(
+      (data ?? []).map((row) => `${row.platform}:${row.handle}`),
+    );
+  }
+
+  const registry = await ensureRegistry();
+  return new Set(
+    registry.wallets
+      .filter((wallet) => wallet.linkedAt)
+      .map((wallet) => `${wallet.platform}:${wallet.handle}`),
+  );
+}
+
 export async function recordFeeShareLaunch(input: {
   platform: SocialPlatform;
   handle: string;
