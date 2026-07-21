@@ -1,5 +1,6 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
+import { isAddress } from 'viem';
 
 import { normalizeHandle } from '@/lib/fee-share/social';
 import type { SocialPlatform } from '@/lib/fee-share/types';
@@ -188,20 +189,41 @@ export async function listPonsShareLaunchesForWallet(
   walletAddress: string,
   limit = 100,
 ): Promise<PonsShareLaunchRecord[]> {
+  if (!isAddress(walletAddress)) {
+    throw new Error('Invalid wallet address.');
+  }
+
   const wallet = walletAddress.toLowerCase();
+  const select =
+    'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at';
 
   if (isSupabaseConfigured()) {
-    const { data, error } = await supabase
-      .from('ponsshare_launches')
-      .select(
-        'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at',
-      )
-      .or(`fee_wallet.eq.${wallet},deployer.eq.${wallet}`)
-      .order('launched_at', { ascending: false })
-      .limit(limit);
+    const [byFeeWallet, byDeployer] = await Promise.all([
+      supabase
+        .from('ponsshare_launches')
+        .select(select)
+        .eq('fee_wallet', wallet)
+        .order('launched_at', { ascending: false })
+        .limit(limit),
+      supabase
+        .from('ponsshare_launches')
+        .select(select)
+        .eq('deployer', wallet)
+        .order('launched_at', { ascending: false })
+        .limit(limit),
+    ]);
 
-    if (error) throw new Error(error.message);
-    return (data as LaunchRow[]).map(rowToLaunch);
+    if (byFeeWallet.error) throw new Error(byFeeWallet.error.message);
+    if (byDeployer.error) throw new Error(byDeployer.error.message);
+
+    const merged = new Map<string, PonsShareLaunchRecord>();
+    for (const row of [...(byFeeWallet.data ?? []), ...(byDeployer.data ?? [])]) {
+      merged.set(row.token.toLowerCase(), rowToLaunch(row as LaunchRow));
+    }
+
+    return [...merged.values()]
+      .sort((a, b) => Date.parse(b.launchedAt) - Date.parse(a.launchedAt))
+      .slice(0, limit);
   }
 
   const registry = await ensureRegistry();

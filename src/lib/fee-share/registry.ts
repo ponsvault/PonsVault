@@ -4,6 +4,7 @@ import path from 'path';
 import type { FeeShareRegistryFile, FeeShareWalletRecord, SocialPlatform } from './types';
 import { decryptPrivateKey, encryptPrivateKey } from './wallet-crypto';
 import { normalizeHandle } from './social';
+import { isFeeShareWalletClaimedRow } from './wallet-claimed';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
 const REGISTRY_PATH = path.join(process.cwd(), 'data', 'fee-share-registry.json');
@@ -161,20 +162,31 @@ export async function listClaimedFeeShareWalletKeys(): Promise<Set<string>> {
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase
       .from('fee_share_wallets')
-      .select('platform, handle')
-      .not('linked_at', 'is', null);
+      .select('platform, handle, linked_at, privy_user_id, privy_wallet_id')
+      .not('linked_at', 'is', null)
+      .not('privy_user_id', 'is', null)
+      .not('privy_wallet_id', 'is', null)
+      .like('privy_user_id', 'did:privy:%');
 
     if (error) throw new Error(error.message);
 
     return new Set(
-      (data ?? []).map((row) => `${row.platform}:${row.handle}`),
+      (data ?? [])
+        .filter((row) => isFeeShareWalletClaimedRow(row))
+        .map((row) => `${row.platform}:${row.handle}`),
     );
   }
 
   const registry = await ensureRegistry();
   return new Set(
     registry.wallets
-      .filter((wallet) => wallet.linkedAt)
+      .filter((wallet) =>
+        isFeeShareWalletClaimedRow({
+          linked_at: wallet.linkedAt,
+          privy_user_id: wallet.privyUserId,
+          privy_wallet_id: wallet.privyWalletId,
+        }),
+      )
       .map((wallet) => `${wallet.platform}:${wallet.handle}`),
   );
 }

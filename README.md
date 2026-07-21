@@ -64,16 +64,19 @@ See `.env.example` for Privy and Supabase keys. Token images upload through pons
 ### Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)
-2. Run `supabase/schema.sql` in **Database → SQL Editor**
-3. Copy **Project URL**, **anon key**, and **service role key** into `.env.local`
-4. Generate a server-only encryption key and add it to `.env.local` and Vercel:
+2. Run `supabase/schema.sql` in **Database → SQL Editor** (fresh setup only — it drops tables)
+3. If Supabase was already live, run `supabase/rls-lockdown.sql` instead to block public writes without deleting data
+4. Copy **Project URL** and **service role key** into `.env.local` and Vercel — never expose the service role key in the browser
+5. Generate a server-only encryption key and add it to `.env.local` and Vercel:
 
 ```bash
 openssl rand -base64 32
 # → set as FEE_WALLET_ENCRYPTION_KEY (never commit this value)
 ```
 
-5. Restart the dev server
+6. Restart the dev server
+
+**Security:** PonsShare uses Supabase **server-side only** via `SUPABASE_SERVICE_ROLE_KEY`. If explore showed fake “wallet claimed” or overwritten launches, run **`supabase/rls-lockdown.sql`** in the SQL Editor immediately (blocks public anon/authenticated writes + cleans fake rows). Do not add open RLS policies in the Supabase dashboard. Rotate the anon key in Supabase → Settings → API if it was ever exposed client-side.
 
 Fee-share private keys are encrypted with **AES-256-GCM** before they are written to Supabase or local JSON. The decryption key lives only in environment variables.
 

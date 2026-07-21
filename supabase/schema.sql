@@ -93,6 +93,55 @@ create index if not exists idx_fee_claims_token
   on fee_claims (token);
 
 -- ── Row-level security ────────────────────────────────────────────────────────
+-- App access is server-only via SUPABASE_SERVICE_ROLE_KEY (bypasses RLS).
+-- anon/authenticated must not read or write these tables directly.
 alter table fee_share_wallets enable row level security;
 alter table ponsshare_launches enable row level security;
 alter table fee_claims enable row level security;
+
+revoke all on table fee_share_wallets from anon, authenticated;
+revoke all on table ponsshare_launches from anon, authenticated;
+revoke all on table fee_claims from anon, authenticated;
+
+create policy "deny_anon_all"
+  on fee_share_wallets for all to anon using (false) with check (false);
+create policy "deny_authenticated_all"
+  on fee_share_wallets for all to authenticated using (false) with check (false);
+
+create policy "deny_anon_all"
+  on ponsshare_launches for all to anon using (false) with check (false);
+create policy "deny_authenticated_all"
+  on ponsshare_launches for all to authenticated using (false) with check (false);
+
+create policy "deny_anon_all"
+  on fee_claims for all to anon using (false) with check (false);
+create policy "deny_authenticated_all"
+  on fee_claims for all to authenticated using (false) with check (false);
+
+create or replace function validate_fee_wallet_privy_link()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.linked_at is not null then
+    if new.privy_user_id is null or new.privy_wallet_id is null then
+      raise exception 'linked_at requires privy_user_id and privy_wallet_id';
+    end if;
+
+    if new.privy_user_id !~ '^did:privy:' then
+      raise exception 'invalid privy_user_id';
+    end if;
+
+    if length(new.privy_wallet_id) < 8 then
+      raise exception 'invalid privy_wallet_id';
+    end if;
+  end if;
+
+  return new;
+end;
+$$;
+
+create trigger fee_share_wallets_validate_privy_link
+  before insert or update on fee_share_wallets
+  for each row
+  execute function validate_fee_wallet_privy_link();
