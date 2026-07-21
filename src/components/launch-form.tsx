@@ -538,7 +538,20 @@ export function LaunchForm() {
             </label>
             {form.useFeeShare ? (
               <div className="launchpad-fee-share mt-3">
-                <div className="launchpad-fee-share-platforms">
+                <div className="launchpad-fee-share-caution" role="note">
+                  <p className="launchpad-fee-share-caution-title">How pons fee sharing works</p>
+                  <p>
+                    When you set a fee wallet, pons sends both the <strong>developer buy tokens</strong>{' '}
+                    and future <strong>creator trading fees</strong> to that wallet in one launch
+                    transaction. This is pons protocol design — not a PonsShare override.
+                  </p>
+                  <p>
+                    You still pay the ETH for the dev buy from your launcher wallet, but the tokens from
+                    that buy go to the fee recipient. Set dev buy to 0 if you want to keep no tokens for
+                    yourself.
+                  </p>
+                </div>
+                <div className="launchpad-fee-share-platforms mt-3">
                   <button
                     type="button"
                     aria-pressed={form.feeShareMode === 'social'}

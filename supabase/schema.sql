@@ -13,7 +13,7 @@ create extension if not exists "pgcrypto";
 -- ── fee_share_wallets ─────────────────────────────────────────────────────────
 -- Platform-generated EVM wallets for social fee recipients.
 -- Wallets are created at launch time, then linked to a Privy user on first claim login.
--- private_key is stored in plain text for now (server-side only via service role).
+-- private_key is AES-256-GCM encrypted by the app before insert (see FEE_WALLET_ENCRYPTION_KEY).
 create table if not exists fee_share_wallets (
   id                     uuid        primary key default gen_random_uuid(),
   platform               text        not null

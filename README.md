@@ -66,7 +66,16 @@ See `.env.example` for Privy and Supabase keys. Token images upload through pons
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run `supabase/schema.sql` in **Database → SQL Editor**
 3. Copy **Project URL**, **anon key**, and **service role key** into `.env.local`
-4. Restart the dev server
+4. Generate a server-only encryption key and add it to `.env.local` and Vercel:
+
+```bash
+openssl rand -base64 32
+# → set as FEE_WALLET_ENCRYPTION_KEY (never commit this value)
+```
+
+5. Restart the dev server
+
+Fee-share private keys are encrypted with **AES-256-GCM** before they are written to Supabase or local JSON. The decryption key lives only in environment variables.
 
 Without Supabase, launches and fee-share wallets fall back to local JSON under `data/` (gitignored). Fee claim tracking requires Supabase.
 

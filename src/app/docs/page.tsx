@@ -49,8 +49,8 @@ export default function DocsPage() {
               <Share2 className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.75} />
               <h3>Social fee sharing</h3>
               <p>
-                At launch, set <code>feeWallet</code> to your own address, a custom wallet, or a
-                pre-generated wallet tied to an X or GitHub handle.
+                At launch, set <code>feeWallet</code> on the pons factory call. Pons routes both the
+                developer buy tokens and creator trading fees to that wallet in the same transaction.
               </p>
             </article>
             <article className="docs-card">
@@ -93,6 +93,19 @@ export default function DocsPage() {
               claims fees via the pons locker&apos;s <code>collectFees(token)</code> call.
             </li>
           </ol>
+        </section>
+
+        <section className="docs-section docs-section-highlight">
+          <h2>Important: pons fee wallet behavior</h2>
+          <p>
+            When you assign a fee wallet at launch, pons sends <strong>both</strong> the developer buy
+            tokens and future creator trading fees to that address. You pay the dev buy ETH from your
+            launcher wallet, but the tokens land with the fee recipient.
+          </p>
+          <p className="docs-note">
+            Want to launch without giving dev buy tokens to someone else? Leave developer buy at 0, or
+            launch without fee sharing and keep the default payout on your wallet.
+          </p>
         </section>
 
         <section className="docs-section docs-section-highlight">

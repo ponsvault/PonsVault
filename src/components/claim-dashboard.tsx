@@ -2,10 +2,10 @@
 
 import { usePrivy } from '@privy-io/react-auth';
 import { useQuery } from '@tanstack/react-query';
-import { Copy, ExternalLink, KeyRound, Loader2, Wallet } from 'lucide-react';
+import { Copy, ExternalLink, KeyRound, Loader2, TriangleAlert, Wallet, X } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { exportFeeSharePrivateKey, fetchClaimProfile, isPrivyConfigured } from '@/lib/fee-share/api';
 import { txUrl } from '@/lib/pons/launch';
@@ -33,6 +33,7 @@ function ClaimDashboardInner() {
   const [exportedKey, setExportedKey] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
 
   const loadProfile = useCallback(async () => {
     const token = await getAccessToken();
@@ -46,17 +47,13 @@ function ClaimDashboardInner() {
     enabled: authenticated,
   });
 
-  async function handleExportKey() {
+  async function confirmExportKey() {
+    setExportConfirmOpen(false);
     setExportError('');
     setExportedKey(null);
     setCopied(false);
-
-    const confirmed = window.confirm(
-      'Exporting reveals your fee-share wallet private key. Anyone with this key controls the wallet and its funds. Continue?',
-    );
-    if (!confirmed) return;
-
     setExporting(true);
+
     try {
       const token = await getAccessToken();
       if (!token) throw new Error('Could not read Privy access token.');
@@ -68,6 +65,17 @@ function ClaimDashboardInner() {
       setExporting(false);
     }
   }
+
+  useEffect(() => {
+    if (!exportConfirmOpen) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setExportConfirmOpen(false);
+    }
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [exportConfirmOpen]);
 
   async function copyExportedKey() {
     if (!exportedKey) return;
@@ -166,7 +174,7 @@ function ClaimDashboardInner() {
                 <div className="mt-4 space-y-3">
                   <button
                     type="button"
-                    onClick={() => handleExportKey().catch(() => undefined)}
+                    onClick={() => setExportConfirmOpen(true)}
                     disabled={exporting}
                     className="home-btn home-btn-secondary"
                   >
@@ -221,6 +229,73 @@ function ClaimDashboardInner() {
           </div>
         ) : null}
       </div>
+
+      {exportConfirmOpen ? (
+        <div
+          className="app-dialog-backdrop"
+          role="presentation"
+          onClick={() => setExportConfirmOpen(false)}
+        >
+          <div
+            className="app-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="export-key-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="app-dialog-header">
+              <div className="app-dialog-icon">
+                <TriangleAlert className="h-5 w-5" strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 id="export-key-dialog-title" className="app-dialog-title">
+                  Export private key?
+                </h2>
+                <p className="app-dialog-subtitle">
+                  This reveals the full private key for your fee-share wallet.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="app-dialog-close"
+                aria-label="Close dialog"
+                onClick={() => setExportConfirmOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="app-dialog-body">
+              <p>
+                Anyone with this key can control the wallet and move its funds, including creator
+                fees and any tokens assigned to it at launch.
+              </p>
+              <ul className="app-dialog-list">
+                <li>Never share it in chat, email, or screenshots</li>
+                <li>Import it only into a wallet you control</li>
+                <li>PonsShare will never ask for it again after you copy it</li>
+              </ul>
+            </div>
+
+            <div className="app-dialog-actions">
+              <button
+                type="button"
+                className="home-btn home-btn-secondary"
+                onClick={() => setExportConfirmOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="home-btn home-btn-primary"
+                onClick={() => confirmExportKey().catch(() => undefined)}
+              >
+                Export key
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <p className="text-xs text-[var(--text-subtle)]">
         Claim status syncs automatically from on-chain events. Only tokens launched through

@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
 
 import type { FeeShareRegistryFile, FeeShareWalletRecord, SocialPlatform } from './types';
+import { decryptPrivateKey, encryptPrivateKey } from './wallet-crypto';
 import { normalizeHandle } from './social';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 
@@ -32,10 +33,30 @@ function rowToRecord(row: FeeShareWalletRow): FeeShareWalletRecord {
     privyUserId: row.privy_user_id,
     privyWalletId: row.privy_wallet_id,
     walletAddress: row.wallet_address as `0x${string}`,
-    privateKey: row.private_key,
+    privateKey: decryptPrivateKey(row.private_key),
     linkedAt: row.linked_at,
     createdAt: row.created_at,
     launches: [],
+  };
+}
+
+function persistPrivateKey(privateKey: string): string {
+  return encryptPrivateKey(privateKey);
+}
+
+function hydrateWalletRecord(record: FeeShareWalletRecord): FeeShareWalletRecord {
+  if (!record.privateKey) return record;
+  return {
+    ...record,
+    privateKey: decryptPrivateKey(record.privateKey),
+  };
+}
+
+function serializeWalletRecord(record: FeeShareWalletRecord): FeeShareWalletRecord {
+  if (!record.privateKey) return record;
+  return {
+    ...record,
+    privateKey: persistPrivateKey(record.privateKey),
   };
 }
 
@@ -61,24 +82,24 @@ async function getFeeShareWalletFromJson(
 ): Promise<FeeShareWalletRecord | null> {
   const registry = await ensureRegistry();
   const normalized = normalizeHandle(handle);
-  return (
-    registry.wallets.find(
-      (w) => w.platform === platform && w.handle === normalized,
-    ) ?? null
+  const wallet = registry.wallets.find(
+    (w) => w.platform === platform && w.handle === normalized,
   );
+  return wallet ? hydrateWalletRecord(wallet) : null;
 }
 
 async function upsertFeeShareWalletToJson(
   record: FeeShareWalletRecord,
 ): Promise<FeeShareWalletRecord> {
   const registry = await ensureRegistry();
+  const stored = serializeWalletRecord(record);
   const idx = registry.wallets.findIndex(
     (w) => w.platform === record.platform && w.handle === record.handle,
   );
-  if (idx >= 0) registry.wallets[idx] = record;
-  else registry.wallets.push(record);
+  if (idx >= 0) registry.wallets[idx] = stored;
+  else registry.wallets.push(stored);
   await saveRegistry(registry);
-  return record;
+  return hydrateWalletRecord(stored);
 }
 
 export async function getFeeShareWallet(
@@ -120,7 +141,7 @@ export async function upsertFeeShareWallet(
           privy_user_id: record.privyUserId,
           privy_wallet_id: record.privyWalletId,
           wallet_address: record.walletAddress.toLowerCase(),
-          private_key: record.privateKey,
+          private_key: persistPrivateKey(record.privateKey),
           linked_at: record.linkedAt,
           created_at: record.createdAt,
         },

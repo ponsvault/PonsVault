@@ -468,6 +468,30 @@ label.launchpad-field-note {
   background: var(--accent-hover);
 }
 
+.launchpad-fee-share-caution {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(251, 191, 36, 0.28);
+  background: rgba(251, 191, 36, 0.08);
+}
+
+.launchpad-fee-share-caution-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fde68a;
+}
+
+.launchpad-fee-share-caution p {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.55;
+  color: rgba(253, 230, 138, 0.92);
+}
+
+.launchpad-fee-share-caution strong {
+  color: #fef3c7;
+}
+
 .launchpad-fee-share-platforms {
   display: flex;
   gap: 10px;
@@ -2148,4 +2172,106 @@ label.launchpad-field-note {
   font-size: 13px;
   line-height: 1.6;
   color: var(--text-subtle);
+}
+
+.app-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(6px);
+}
+
+.app-dialog {
+  width: min(100%, 440px);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: #141414;
+  box-shadow: var(--float-shadow);
+}
+
+.app-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 20px 0;
+}
+
+.app-dialog-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid rgba(251, 191, 36, 0.24);
+  background: rgba(251, 191, 36, 0.1);
+  color: #fde68a;
+  flex-shrink: 0;
+}
+
+.app-dialog-title {
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: var(--tracking);
+  color: var(--text-primary);
+}
+
+.app-dialog-subtitle {
+  margin-top: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.app-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.app-dialog-close:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}
+
+.app-dialog-body {
+  padding: 16px 20px 0;
+}
+
+.app-dialog-body p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
+.app-dialog-list {
+  margin-top: 12px;
+  padding-left: 1.1rem;
+}
+
+.app-dialog-list li {
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-subtle);
+}
+
+.app-dialog-list li + li {
+  margin-top: 6px;
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 20px;
 }
