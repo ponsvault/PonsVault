@@ -1,13 +1,11 @@
 import { mkdir, readFile, writeFile } from 'fs/promises';
 import path from 'path';
-import { isAddress } from 'viem';
 
-import { normalizeHandle } from '@/lib/fee-share/social';
-import type { SocialPlatform } from '@/lib/fee-share/types';
+import type { VaultTemplateId } from '@/lib/pons/vault';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
-import type { PonsShareLaunchRecord, PonsShareLaunchRegistryFile } from './types';
+import type { PonsVaultLaunchRecord, PonsVaultLaunchRegistryFile } from './types';
 
-const REGISTRY_PATH = path.join(process.cwd(), 'data', 'ponsshare-launches.json');
+const REGISTRY_PATH = path.join(process.cwd(), 'data', 'ponsvault-launches.json');
 
 type LaunchRow = {
   token: string;
@@ -17,13 +15,16 @@ type LaunchRow = {
   logo: string;
   deployer: string;
   fee_wallet: string;
-  fee_share_platform: SocialPlatform | null;
-  fee_share_handle: string | null;
+  vault: string | null;
+  vault_template: VaultTemplateId | null;
   transaction_hash: string;
   launched_at: string;
 };
 
-function rowToLaunch(row: LaunchRow): PonsShareLaunchRecord {
+const LAUNCH_COLUMNS =
+  'token, name, symbol, description, logo, deployer, fee_wallet, vault, vault_template, transaction_hash, launched_at';
+
+function rowToLaunch(row: LaunchRow): PonsVaultLaunchRecord {
   return {
     token: row.token,
     name: row.name,
@@ -32,14 +33,14 @@ function rowToLaunch(row: LaunchRow): PonsShareLaunchRecord {
     logo: row.logo,
     deployer: row.deployer,
     feeWallet: row.fee_wallet as `0x${string}`,
-    feeSharePlatform: row.fee_share_platform ?? undefined,
-    feeShareHandle: row.fee_share_handle ?? undefined,
+    vault: row.vault ?? undefined,
+    vaultTemplate: row.vault_template ?? undefined,
     transactionHash: row.transaction_hash as `0x${string}`,
     launchedAt: row.launched_at,
   };
 }
 
-function launchToRow(launch: PonsShareLaunchRecord): LaunchRow {
+function launchToRow(launch: PonsVaultLaunchRecord): LaunchRow {
   return {
     token: launch.token.toLowerCase(),
     name: launch.name,
@@ -48,42 +49,38 @@ function launchToRow(launch: PonsShareLaunchRecord): LaunchRow {
     logo: launch.logo,
     deployer: launch.deployer.toLowerCase(),
     fee_wallet: launch.feeWallet.toLowerCase(),
-    fee_share_platform: launch.feeSharePlatform ?? null,
-    fee_share_handle: launch.feeShareHandle
-      ? normalizeHandle(launch.feeShareHandle)
-      : null,
+    vault: launch.vault ? launch.vault.toLowerCase() : null,
+    vault_template: launch.vaultTemplate ?? null,
     transaction_hash: launch.transactionHash,
     launched_at: launch.launchedAt,
   };
 }
 
-async function ensureRegistry(): Promise<PonsShareLaunchRegistryFile> {
+async function ensureRegistry(): Promise<PonsVaultLaunchRegistryFile> {
   await mkdir(path.dirname(REGISTRY_PATH), { recursive: true });
   try {
     const raw = await readFile(REGISTRY_PATH, 'utf8');
-    return JSON.parse(raw) as PonsShareLaunchRegistryFile;
+    return JSON.parse(raw) as PonsVaultLaunchRegistryFile;
   } catch {
-    const empty: PonsShareLaunchRegistryFile = { launches: [] };
+    const empty: PonsVaultLaunchRegistryFile = { launches: [] };
     await writeFile(REGISTRY_PATH, JSON.stringify(empty, null, 2));
     return empty;
   }
 }
 
-async function saveRegistry(registry: PonsShareLaunchRegistryFile): Promise<void> {
+async function saveRegistry(registry: PonsVaultLaunchRegistryFile): Promise<void> {
   await writeFile(REGISTRY_PATH, JSON.stringify(registry, null, 2));
 }
 
-export async function recordPonsShareLaunch(
-  launch: PonsShareLaunchRecord,
-): Promise<PonsShareLaunchRecord> {
+export async function recordPonsVaultLaunch(
+  launch: PonsVaultLaunchRecord,
+): Promise<PonsVaultLaunchRecord> {
   if (isSupabaseConfigured()) {
     const row = launchToRow(launch);
     const { data, error } = await supabase
-      .from('ponsshare_launches')
+      .from('ponsvault_launches')
       .upsert(row, { onConflict: 'token' })
-      .select(
-        'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at',
-      )
+      .select(LAUNCH_COLUMNS)
       .single();
 
     if (error) throw new Error(error.message);
@@ -105,17 +102,15 @@ export async function recordPonsShareLaunch(
   return launch;
 }
 
-export async function getPonsShareLaunchByToken(
+export async function getPonsVaultLaunchByToken(
   token: string,
-): Promise<PonsShareLaunchRecord | null> {
+): Promise<PonsVaultLaunchRecord | null> {
   const normalized = token.toLowerCase();
 
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase
-      .from('ponsshare_launches')
-      .select(
-        'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at',
-      )
+      .from('ponsvault_launches')
+      .select(LAUNCH_COLUMNS)
       .eq('token', normalized)
       .maybeSingle();
 
@@ -129,13 +124,11 @@ export async function getPonsShareLaunchByToken(
   );
 }
 
-export async function listPonsShareLaunches(limit = 100): Promise<PonsShareLaunchRecord[]> {
+export async function listPonsVaultLaunches(limit = 100): Promise<PonsVaultLaunchRecord[]> {
   if (isSupabaseConfigured()) {
     const { data, error } = await supabase
-      .from('ponsshare_launches')
-      .select(
-        'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at',
-      )
+      .from('ponsvault_launches')
+      .select(LAUNCH_COLUMNS)
       .order('launched_at', { ascending: false })
       .limit(limit);
 
@@ -145,93 +138,4 @@ export async function listPonsShareLaunches(limit = 100): Promise<PonsShareLaunc
 
   const registry = await ensureRegistry();
   return registry.launches.slice(0, limit);
-}
-
-export async function listPonsShareLaunchesForFeeHandle(
-  handle: string,
-  platform?: SocialPlatform,
-  limit = 100,
-): Promise<PonsShareLaunchRecord[]> {
-  const normalized = normalizeHandle(handle);
-
-  if (isSupabaseConfigured()) {
-    let query = supabase
-      .from('ponsshare_launches')
-      .select(
-        'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at',
-      )
-      .eq('fee_share_handle', normalized)
-      .order('launched_at', { ascending: false })
-      .limit(limit);
-
-    if (platform) {
-      query = query.eq('fee_share_platform', platform);
-    }
-
-    const { data, error } = await query;
-    if (error) throw new Error(error.message);
-    return (data as LaunchRow[]).map(rowToLaunch);
-  }
-
-  const registry = await ensureRegistry();
-  return registry.launches
-    .filter((launch) => {
-      if (launch.feeShareHandle?.toLowerCase() !== normalized) return false;
-      if (platform && launch.feeSharePlatform && launch.feeSharePlatform !== platform) {
-        return false;
-      }
-      return true;
-    })
-    .slice(0, limit);
-}
-
-export async function listPonsShareLaunchesForWallet(
-  walletAddress: string,
-  limit = 100,
-): Promise<PonsShareLaunchRecord[]> {
-  if (!isAddress(walletAddress)) {
-    throw new Error('Invalid wallet address.');
-  }
-
-  const wallet = walletAddress.toLowerCase();
-  const select =
-    'token, name, symbol, description, logo, deployer, fee_wallet, fee_share_platform, fee_share_handle, transaction_hash, launched_at';
-
-  if (isSupabaseConfigured()) {
-    const [byFeeWallet, byDeployer] = await Promise.all([
-      supabase
-        .from('ponsshare_launches')
-        .select(select)
-        .eq('fee_wallet', wallet)
-        .order('launched_at', { ascending: false })
-        .limit(limit),
-      supabase
-        .from('ponsshare_launches')
-        .select(select)
-        .eq('deployer', wallet)
-        .order('launched_at', { ascending: false })
-        .limit(limit),
-    ]);
-
-    if (byFeeWallet.error) throw new Error(byFeeWallet.error.message);
-    if (byDeployer.error) throw new Error(byDeployer.error.message);
-
-    const merged = new Map<string, PonsShareLaunchRecord>();
-    for (const row of [...(byFeeWallet.data ?? []), ...(byDeployer.data ?? [])]) {
-      merged.set(row.token.toLowerCase(), rowToLaunch(row as LaunchRow));
-    }
-
-    return [...merged.values()]
-      .sort((a, b) => Date.parse(b.launchedAt) - Date.parse(a.launchedAt))
-      .slice(0, limit);
-  }
-
-  const registry = await ensureRegistry();
-  return registry.launches
-    .filter(
-      (launch) =>
-        launch.feeWallet.toLowerCase() === wallet ||
-        launch.deployer.toLowerCase() === wallet,
-    )
-    .slice(0, limit);
 }

@@ -1,6 +1,6 @@
-import type { SocialPlatform } from '@/lib/fee-share/types';
+import type { VaultTemplateId } from '@/lib/pons/vault';
 
-export interface PonsShareLaunchRecord {
+export interface PonsVaultLaunchRecord {
   token: string;
   name: string;
   symbol: string;
@@ -8,12 +8,13 @@ export interface PonsShareLaunchRecord {
   logo: string;
   deployer: string;
   feeWallet: string;
-  feeSharePlatform?: SocialPlatform;
-  feeShareHandle?: string;
+  /** Vault contract attached at launch, absent when launched without one. */
+  vault?: string;
+  vaultTemplate?: VaultTemplateId;
   transactionHash: string;
   launchedAt: string;
 }
 
-export interface PonsShareLaunchRegistryFile {
-  launches: PonsShareLaunchRecord[];
+export interface PonsVaultLaunchRegistryFile {
+  launches: PonsVaultLaunchRecord[];
 }

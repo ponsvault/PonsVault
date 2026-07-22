@@ -1,17 +1,15 @@
 import { isAddress, type Address, type Hash } from 'viem';
 
-import type { PonsShareLaunchRecord } from './types';
-import { getFeeShareWallet } from '@/lib/fee-share/registry';
-import type { SocialPlatform } from '@/lib/fee-share/types';
-import { normalizeHandle } from '@/lib/fee-share/social';
+import type { PonsVaultLaunchRecord } from './types';
 import { resolveLaunchedToken } from '@/lib/pons/factory';
 import { extractLaunchedToken } from '@/lib/pons/launch';
 import { robinhoodPublicClient } from '@/lib/pons/client';
 import { readCreatorFeeRouting } from '@/lib/pons/token-state';
+import { PONSVAULT_LAUNCHER, isVaultLauncherDeployed } from '@/lib/pons/vault';
 
 export async function verifyLaunchRecordOnChain(
   input: Pick<
-    PonsShareLaunchRecord,
+    PonsVaultLaunchRecord,
     'token' | 'transactionHash' | 'deployer' | 'feeWallet'
   >,
 ): Promise<void> {
@@ -35,7 +33,15 @@ export async function verifyLaunchRecordOnChain(
     throw new Error('Token is not registered on the pons factory.');
   }
 
-  if (resolved.launched.deployer.toLowerCase() !== deployer.toLowerCase()) {
+  // A vault launch goes through PonsVaultLauncher, which becomes the token's
+  // on-chain deployer so that fees can be swept permissionlessly. The creator is
+  // then the transaction sender, which is still asserted below — so recording a
+  // launch you did not send remains impossible.
+  const onChainDeployer = resolved.launched.deployer.toLowerCase();
+  const launchedViaVaultLauncher =
+    isVaultLauncherDeployed() && onChainDeployer === PONSVAULT_LAUNCHER.toLowerCase();
+
+  if (!launchedViaVaultLauncher && onChainDeployer !== deployer.toLowerCase()) {
     throw new Error('Deployer does not match on-chain launch data.');
   }
 
@@ -67,38 +73,11 @@ export async function verifyLaunchRecordOnChain(
   }
 }
 
-export async function verifyLaunchSocialFeeShare(input: {
-  feeWallet: string;
-  feeSharePlatform?: SocialPlatform | null;
-  feeShareHandle?: string | null;
-}): Promise<void> {
-  if (!input.feeSharePlatform || !input.feeShareHandle?.trim()) {
-    return;
-  }
-
-  const wallet = await getFeeShareWallet(
-    input.feeSharePlatform,
-    normalizeHandle(input.feeShareHandle),
-  );
-  if (
-    wallet &&
-    wallet.walletAddress.toLowerCase() !== input.feeWallet.toLowerCase()
-  ) {
-    throw new Error('Social fee-share handle does not match the on-chain fee wallet.');
-  }
-}
-
 export async function verifyLaunchRecord(
   input: Pick<
-    PonsShareLaunchRecord,
-    | 'token'
-    | 'transactionHash'
-    | 'deployer'
-    | 'feeWallet'
-    | 'feeSharePlatform'
-    | 'feeShareHandle'
+    PonsVaultLaunchRecord,
+    'token' | 'transactionHash' | 'deployer' | 'feeWallet'
   >,
 ): Promise<void> {
   await verifyLaunchRecordOnChain(input);
-  await verifyLaunchSocialFeeShare(input);
 }
