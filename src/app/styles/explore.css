@@ -1,0 +1,351 @@
+/* ==========================================================================
+   Explore, launch and token page chrome
+   ========================================================================== */
+
+.pv-page {
+  padding-top: var(--nav-height);
+}
+
+.pv-page-hero {
+  position: relative;
+  padding: clamp(48px, 8vh, 88px) 0 44px;
+}
+
+.pv-page-title {
+  margin-top: 18px;
+  font-size: clamp(32px, 4.4vw, 52px);
+}
+
+.pv-page-lead {
+  margin-top: 16px;
+}
+
+/* block-only, so the shell's horizontal padding survives the cascade */
+.pv-page-body {
+  padding-top: 48px;
+  padding-bottom: 96px;
+}
+
+.pv-index-dot {
+  color: var(--accent);
+}
+
+.pv-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 24px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color var(--dur) var(--ease);
+}
+
+.pv-back:hover {
+  color: var(--text-primary);
+}
+
+.pv-back svg {
+  transition: transform var(--dur) var(--ease);
+}
+
+.pv-back:hover svg {
+  transform: translateX(-2px);
+}
+
+.pv-launch-hero {
+  padding-bottom: 36px;
+}
+
+/* --- token grid ---------------------------------------------------------- */
+
+.pv-explore-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .pv-explore-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .pv-explore-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pv-token-card {
+  height: 100%;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.pv-token-card:hover {
+  background: var(--surface-hover);
+  border-color: var(--hairline-strong);
+}
+
+.pv-token-link {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  text-decoration: none;
+}
+
+.pv-token-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pv-token-logo {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--bg-white);
+  overflow: hidden;
+}
+
+.pv-token-logo-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+  font-weight: var(--w-display);
+  color: var(--text-subtle);
+}
+
+.pv-token-names {
+  min-width: 0;
+  flex: 1;
+}
+
+.pv-token-name {
+  font-size: 14px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.014em;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pv-token-symbol {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.pv-token-status {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xs);
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.pv-token-status-live {
+  border-color: rgba(212, 252, 80, 0.2);
+  background: rgba(212, 252, 80, 0.08);
+  color: var(--accent);
+}
+
+.pv-token-desc {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* what the token's vault is and what it has actually done, at a glance */
+.pv-token-vault {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.pv-token-vault-template {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--text-primary);
+}
+
+.pv-token-vault-burn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.pv-token-vault-idle,
+.pv-token-vault-none {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.pv-token-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
+}
+
+.pv-token-stats dt {
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.pv-token-stats dd {
+  margin-top: 2px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-token-progress {
+  height: 2px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.pv-token-progress-fill {
+  height: 100%;
+  background: var(--accent);
+}
+
+.pv-token-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.pv-token-card:hover .pv-token-foot {
+  color: var(--text-primary);
+}
+
+.pv-token-foot svg {
+  transition: transform var(--dur) var(--ease);
+}
+
+.pv-token-card:hover .pv-token-foot svg {
+  transform: translate(2px, -2px);
+  color: var(--accent);
+}
+
+/* --- loading, empty, error ----------------------------------------------- */
+
+.pv-skeleton-card {
+  height: 210px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  animation: pv-blink 1.8s var(--ease) infinite;
+}
+
+.pv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 40px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.pv-empty-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+}
+
+.pv-empty-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.pv-empty-title {
+  font-size: 15px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.014em;
+  color: var(--text-primary);
+}
+
+.pv-empty-body {
+  max-width: 46ch;
+  font-size: 14px;
+  line-height: 22px;
+  color: var(--text-muted);
+}
+
+.pv-empty .pv-btn {
+  margin-top: 6px;
+}
+
+.pv-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 20px;
+  border: 1px solid rgba(255, 90, 90, 0.22);
+  border-radius: var(--radius-md);
+  background: rgba(255, 90, 90, 0.05);
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.pv-error-retry {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease);
+}
+
+.pv-error-retry:hover {
+  background: var(--surface-hover);
+}

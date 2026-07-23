@@ -1,0 +1,527 @@
+/* ==========================================================================
+   Home page
+   ========================================================================== */
+
+.pv-home {
+  padding-top: var(--nav-height);
+}
+
+/* --- hero ---------------------------------------------------------------- */
+
+.pv-hero {
+  position: relative;
+  padding: clamp(72px, 12vh, 132px) 0 0;
+}
+
+.pv-hero-inner {
+  position: relative;
+  z-index: 1;
+}
+
+.pv-hero-title {
+  max-width: 18ch;
+}
+
+/* lead and buttons sit on one baseline row, as on a product marketing page
+   where the headline is the only large element */
+.pv-hero-sub {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 40px;
+  margin-top: 28px;
+}
+
+.pv-hero-lead {
+  max-width: 46ch;
+}
+
+.pv-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 780px) {
+  .pv-hero-sub {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 24px;
+  }
+}
+
+.pv-hero-visual {
+  margin-top: clamp(48px, 8vh, 80px);
+}
+
+.pv-hero-caption {
+  margin-top: 12px;
+  color: var(--text-subtle);
+}
+
+/* --- vault panel --------------------------------------------------------- */
+
+.vault-panel {
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.03) inset,
+    0 40px 80px -32px rgba(0, 0, 0, 0.8);
+}
+
+.vault-panel-live {
+  margin-left: auto;
+}
+
+.vault-panel-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+}
+
+/* structural split between the two halves, so a stronger line than the
+   decorative hairlines used elsewhere */
+.vault-panel-col:first-child {
+  border-right: 1px solid var(--hairline-strong);
+}
+
+.vault-panel-col:first-child .vault-panel-row,
+.vault-panel-col:first-child .vault-panel-col-head {
+  padding-right: 20px;
+}
+
+@media (max-width: 720px) {
+  .vault-panel-body {
+    grid-template-columns: 1fr;
+  }
+
+  .vault-panel-col:first-child {
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline-strong);
+  }
+}
+
+.vault-panel-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline);
+  font-size: 12px;
+  font-weight: 450;
+  color: var(--text-subtle);
+}
+
+.vault-panel-count {
+  color: var(--text-subtle);
+}
+
+.vault-panel-rows,
+.vault-panel-activity {
+  padding: 4px 0;
+}
+
+.vault-panel-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.vault-panel-row dt {
+  color: var(--text-muted);
+}
+
+.vault-panel-row dd {
+  color: var(--text-primary);
+}
+
+.vault-panel-activity li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  font-size: 13px;
+}
+
+.vault-panel-time {
+  color: var(--text-subtle);
+}
+
+.vault-panel-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+}
+
+.vault-panel-label svg {
+  color: var(--accent-red);
+  flex-shrink: 0;
+}
+
+.vault-panel-value {
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.vault-panel-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-top: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.pv-home .vault-panel-pending {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.vault-panel-pending-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.vault-panel-pending-value {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.vault-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.vault-panel-hint {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* --- shared section bits ------------------------------------------------- */
+
+.pv-section-title {
+  margin-top: 20px;
+  max-width: 24ch;
+}
+
+.pv-section-lead {
+  margin-top: 16px;
+}
+
+/* --- mechanic ------------------------------------------------------------ */
+
+.pv-diagram {
+  margin-top: 48px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.pv-diagram-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.pv-diagram-head .pv-body-sm {
+  color: var(--text-primary);
+}
+
+.vault-flow {
+  padding: 32px 28px;
+}
+
+.vault-flow svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.vf-box {
+  fill: rgba(255, 255, 255, 0.022);
+  stroke: var(--hairline);
+  stroke-width: 1;
+}
+
+.vf-label {
+  fill: var(--text-primary);
+  font-size: 15px;
+  font-weight: 510;
+  letter-spacing: -0.014em;
+}
+
+.vf-sub {
+  fill: var(--text-subtle);
+  font-size: 11px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.vf-rail {
+  stroke: rgba(255, 255, 255, 0.14);
+}
+
+/* one short segment travelling the rail, rather than a dotted line that reads
+   as static decoration */
+.vf-flow {
+  stroke: var(--accent);
+  stroke-dasharray: 26 600;
+  animation: pv-flow 2.6s var(--ease) infinite;
+}
+
+/* --- facts row ----------------------------------------------------------- */
+
+.pv-facts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 40px;
+  border-top: 1px solid var(--hairline);
+}
+
+.pv-fact {
+  padding: 20px 20px 0 0;
+}
+
+.pv-fact-value {
+  margin-top: 4px;
+  font-size: 15px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.014em;
+  color: var(--text-primary);
+}
+
+@media (max-width: 720px) {
+  .pv-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* --- templates ----------------------------------------------------------- */
+
+.pv-tpl-list {
+  margin-top: 44px;
+  border-top: 1px solid var(--hairline);
+}
+
+.pv-tpl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 40px;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--hairline);
+  transition: background var(--dur) var(--ease);
+}
+
+.pv-tpl:hover {
+  background: rgba(255, 255, 255, 0.012);
+}
+
+.pv-tpl-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pv-tpl-body {
+  margin-top: 10px;
+  max-width: 56ch;
+}
+
+.pv-tpl-params {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+}
+
+.pv-tpl-params li {
+  padding: 3px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xs);
+  color: var(--text-subtle);
+}
+
+@media (max-width: 780px) {
+  .pv-tpl {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+}
+
+/* --- steps --------------------------------------------------------------- */
+
+.pv-steps {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 44px;
+  background: var(--hairline);
+  border-top: 1px solid var(--hairline);
+}
+
+.pv-steps > li {
+  padding: 24px 24px 28px 0;
+  background: var(--bg-page);
+}
+
+.pv-steps > li:not(:first-child) {
+  padding-left: 24px;
+}
+
+.pv-step-num {
+  display: block;
+  color: var(--text-subtle);
+  margin-bottom: 14px;
+}
+
+.pv-step-body {
+  margin-top: 8px;
+}
+
+@media (max-width: 860px) {
+  .pv-steps {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .pv-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .pv-steps > li:not(:first-child) {
+    padding-left: 0;
+  }
+}
+
+/* --- guarantees ---------------------------------------------------------- */
+
+.pv-guarantees {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: 44px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.pv-guarantee {
+  height: 100%;
+  padding: 24px;
+  background: var(--bg-page);
+  transition: background var(--dur) var(--ease);
+}
+
+.pv-guarantee:hover {
+  background: rgba(255, 255, 255, 0.016);
+}
+
+.pv-guarantee-body {
+  margin-top: 8px;
+}
+
+@media (max-width: 860px) {
+  .pv-guarantees {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .pv-guarantees {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* --- cta ----------------------------------------------------------------- */
+
+.pv-cta {
+  padding: 96px 0;
+}
+
+.pv-cta-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 40px;
+  flex-wrap: wrap;
+}
+
+.pv-cta-body {
+  margin-top: 14px;
+  max-width: 44ch;
+}
+
+/* --- footer -------------------------------------------------------------- */
+
+.pv-footer {
+  border-top: 1px solid var(--hairline);
+  padding: 56px 0 32px;
+}
+
+.pv-footer-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 56px;
+  flex-wrap: wrap;
+}
+
+.pv-footer-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 30ch;
+}
+
+.pv-footer-tagline {
+  color: var(--text-subtle);
+}
+
+.pv-footer-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, auto));
+  gap: 56px;
+}
+
+.pv-footer-heading {
+  margin-bottom: 12px;
+  font-size: 13px;
+  font-weight: var(--w-display);
+  color: var(--text-primary);
+}
+
+.pv-footer-cols li {
+  margin-bottom: 8px;
+}
+
+.pv-footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--hairline);
+}
+
+.pv-footer-bottom .pv-body-sm {
+  color: var(--text-subtle);
+}
+
+@media (max-width: 560px) {
+  .pv-footer-cols {
+    gap: 32px;
+  }
+}

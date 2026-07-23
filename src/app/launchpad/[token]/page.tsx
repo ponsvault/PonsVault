@@ -13,17 +13,17 @@ export async function generateMetadata({
   const { token } = await params;
 
   if (!isAddress(token)) {
-    return { title: 'Token · PonsShare' };
+    return { title: 'Token · PonsVault' };
   }
 
   try {
     const metadata = await readTokenOnchainMetadata(token as Address);
     return {
-      title: `${metadata.name} (${metadata.symbol}) · PonsShare`,
-      description: metadata.description || `Trade ${metadata.name} on Robinhood Chain through PonsShare.`,
+      title: `${metadata.name} (${metadata.symbol}) · PonsVault`,
+      description: metadata.description || `Trade ${metadata.name} on Robinhood Chain through PonsVault.`,
     };
   } catch {
-    return { title: 'Token · PonsShare' };
+    return { title: 'Token · PonsVault' };
   }
 }
 
@@ -39,7 +39,7 @@ export default async function TokenPage({
   }
 
   return (
-    <main className="bridge-main">
+    <main className="bridge-main pv-token-page">
       <TokenDetail token={token as Address} />
     </main>
   );

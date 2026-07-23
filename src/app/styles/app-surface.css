@@ -1,0 +1,654 @@
+/* ==========================================================================
+   App surfaces — launch form, preview panel, token detail
+
+   These screens predate the current design language. Rather than rewriting
+   1500 lines of legacy selectors, this sheet loads last and retunes them onto
+   the same hairlines, small radii and single easing curve as the rest of the
+   site. Anything here is an intentional override, not a new component.
+   ========================================================================== */
+
+/* --- form shell ---------------------------------------------------------- */
+
+.launchpad-create-page {
+  max-width: 100%;
+}
+
+.launchpad-create-shell {
+  border-color: var(--hairline);
+  border-radius: var(--radius-lg);
+  background: #0f0f0f;
+  box-shadow: none;
+}
+
+.launchpad-create-form {
+  gap: 20px;
+  padding: 28px;
+}
+
+/* the form heading sits below the page h1, so it must not compete with it */
+.split-shell-title {
+  font-size: 17px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.016em;
+}
+
+.launchpad-label {
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+/* --- inputs -------------------------------------------------------------- */
+
+.launchpad-input,
+.launchpad-prefixed-input {
+  min-height: 36px;
+  border-color: var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 14px;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.launchpad-input:hover,
+.launchpad-prefixed-input:hover {
+  background: var(--surface-hover);
+}
+
+.launchpad-textarea {
+  min-height: 84px;
+  padding: 9px 12px;
+}
+
+.launchpad-input:focus-visible,
+.launchpad-prefixed-input:focus-within,
+.launchpad-buy-field:focus-within {
+  border-color: rgba(212, 252, 80, 0.5);
+  box-shadow: rgba(212, 252, 80, 0.1) 0 0 0 2px;
+}
+
+.launchpad-prefixed-input input {
+  padding: 8px 12px 8px 2px;
+}
+
+.launchpad-field-note {
+  font-size: 11.5px;
+  color: var(--text-subtle);
+}
+
+/* --- image upload -------------------------------------------------------- */
+
+.launchpad-upload {
+  min-height: 60px;
+  border-radius: var(--radius-md);
+  border-color: rgba(255, 255, 255, 0.12);
+  background: var(--surface);
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.launchpad-upload.is-ready:hover {
+  background: var(--surface-hover);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.launchpad-upload-thumb {
+  flex: 0 0 40px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.launchpad-upload-copy {
+  font-size: 13px;
+}
+
+/* --- dev buy ------------------------------------------------------------- */
+
+.launchpad-buy-field {
+  padding: 11px 12px;
+  border-color: var(--hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.launchpad-buy-entry input {
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+
+/* --- token page vault panel ---------------------------------------------- */
+
+.token-vault {
+  margin-top: 20px;
+}
+
+.token-vault-status {
+  margin-left: auto;
+}
+
+/* the single number that matters, stated before any of the parameters */
+.token-vault-headline {
+  padding: 18px 16px 16px;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.token-vault-headline-figure {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 22px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.02em;
+}
+
+.token-vault-headline-note {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-muted);
+}
+
+.token-vault-headline-note a {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.token-vault-steps {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  margin: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+.token-vault-steps li {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.token-vault-steps p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-muted);
+}
+
+.token-vault-steps strong {
+  color: var(--text-primary);
+  font-weight: var(--w-display);
+}
+
+.token-vault-step-n {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-subtle);
+}
+
+.token-vault-claim {
+  margin: 0;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--hairline-strong);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--text-muted);
+}
+
+.token-vault-claim strong {
+  color: var(--text-primary);
+  font-weight: var(--w-display);
+}
+
+.token-vault-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.token-vault-body > * + * {
+  border-left: 1px solid var(--hairline-strong);
+}
+
+@media (max-width: 720px) {
+  .token-vault-body {
+    grid-template-columns: 1fr;
+  }
+
+  .token-vault-body > * + * {
+    border-left: none;
+    border-top: 1px solid var(--hairline-strong);
+  }
+}
+
+.token-vault-col {
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.token-vault-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.token-vault-runs {
+  font-size: 11px;
+  color: var(--text-subtle);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.token-vault-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.token-vault-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.token-vault-row:last-child {
+  border-bottom: none;
+}
+
+.token-vault-row dt {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.token-vault-row dd {
+  color: var(--text-primary);
+  text-align: right;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* a sentence, not a figure — mono would make it read as data */
+.token-vault-prose {
+  font-size: 12.5px;
+  line-height: 18px;
+  color: var(--text-muted) !important;
+}
+
+.token-vault-row a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 2px;
+}
+
+.token-vault-row a:hover {
+  text-decoration-color: currentColor;
+}
+
+.token-vault-alert {
+  margin: 0 16px;
+}
+
+.token-vault-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--hairline-strong);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.token-vault-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.token-vault-pending-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-subtle);
+}
+
+.token-vault-pending-value {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+.token-vault-hint {
+  font-size: 11.5px;
+  line-height: 16px;
+  color: var(--text-subtle);
+  max-width: 46ch;
+}
+
+/* sized to its label, so a disabled state does not read as a call to action */
+.token-vault-action {
+  flex: none;
+  width: auto;
+  align-self: center;
+}
+
+@media (max-width: 560px) {
+  .token-vault-foot {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .token-vault-action {
+    width: 100%;
+  }
+}
+
+/* --- staking controls ---------------------------------------------------- */
+
+.token-stake-form {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 14px 16px;
+  border-top: 1px solid var(--hairline-strong);
+}
+
+.token-stake-input {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.token-stake-input input {
+  width: 100%;
+  padding: 9px 56px 9px 12px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  transition: border-color var(--dur) var(--ease);
+}
+
+.token-stake-input input:focus {
+  outline: none;
+  border-color: var(--hairline-focus, rgba(255, 255, 255, 0.28));
+}
+
+.token-stake-max {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.token-stake-max:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--hairline-strong);
+}
+
+.token-stake-max:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.token-stake-actions {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+
+@media (max-width: 560px) {
+  .token-stake-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .token-stake-actions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* --- vault picker -------------------------------------------------------- */
+
+.vault-picker {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 4px;
+}
+
+@media (max-width: 560px) {
+  .vault-picker {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vault-option {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 12px;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.vault-option:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.vault-option.is-selected {
+  border-color: rgba(212, 252, 80, 0.5);
+  background: rgba(212, 252, 80, 0.06);
+}
+
+.vault-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vault-option-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.vault-option-name {
+  font-size: 13px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+}
+
+.vault-option-tagline {
+  font-size: 11.5px;
+  line-height: 17px;
+  color: var(--text-subtle);
+}
+
+/* --- vault config -------------------------------------------------------- */
+
+.vault-config {
+  gap: 14px;
+}
+
+.vault-config-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+@media (max-width: 560px) {
+  .vault-config-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.vault-suffix {
+  padding-right: 12px;
+  color: var(--text-subtle);
+  font-size: 13px;
+}
+
+/* --- disclosure ---------------------------------------------------------- */
+
+.launchpad-disclosure {
+  border-top-color: var(--hairline);
+  border-bottom-color: var(--hairline);
+}
+
+.launchpad-advanced-toggle {
+  min-height: 48px;
+}
+
+.launchpad-advanced-title {
+  font-size: 13px;
+  font-weight: var(--w-display);
+}
+
+.launchpad-advanced-chevron {
+  transition: transform var(--dur) var(--ease);
+}
+
+/* --- primary action ------------------------------------------------------ */
+
+.ui-btn {
+  min-height: 38px;
+  padding: 0 18px;
+  border-radius: var(--radius-pill);
+  font-size: 14px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.008em;
+  transition:
+    background var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
+}
+
+/* --- preview panel ------------------------------------------------------- */
+
+.launchpad-preview-panel {
+  gap: 16px;
+  padding: 28px;
+  border-left: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.launchpad-preview-image {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.launchpad-preview-identity h2 {
+  font-size: 19px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.02em;
+}
+
+.launchpad-preview-identity p {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+.launchpad-preview-description {
+  font-size: 13px;
+  line-height: 21px;
+}
+
+.launchpad-preview-details {
+  border-top-color: var(--hairline);
+}
+
+.launchpad-preview-details > div {
+  padding: 11px 0;
+  border-bottom-color: var(--hairline);
+  font-size: 12.5px;
+}
+
+.launchpad-preview-details dd {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+@media (max-width: 819px) {
+  .launchpad-preview-panel {
+    border-left: 0;
+    border-top: 1px solid var(--hairline);
+  }
+}
+
+/* --- alerts -------------------------------------------------------------- */
+
+.launchpad-alert,
+.launchpad-success {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+}
+
+/* --- misc legacy chrome -------------------------------------------------- */
+
+.token-buy-back {
+  box-shadow: none;
+  border-color: var(--hairline-strong);
+  background: transparent;
+  font-size: 13px;
+  transition: background var(--dur) var(--ease);
+}
+
+.token-buy-back:hover {
+  background: var(--surface-hover);
+}
+
+.convert-max {
+  font-weight: var(--w-display);
+}

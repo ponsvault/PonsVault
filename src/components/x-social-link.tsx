@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils';
 
-export const PONSSHARE_X_URL = 'https://x.com/ponsshare';
+export const PONSVAULT_X_URL = 'https://x.com/ponsvault';
+export const PONSVAULT_X_HANDLE = '@ponsvault';
 
 export function XLogo({ className }: { className?: string }) {
   return (
@@ -24,11 +25,11 @@ export function XSocialLink({
 }) {
   return (
     <a
-      href={PONSSHARE_X_URL}
+      href={PONSVAULT_X_URL}
       target="_blank"
       rel="noreferrer"
       className={cn('social-x-link', className)}
-      aria-label="PonsShare on X"
+      aria-label="PonsVault on X"
     >
       <XLogo className={cn('social-x-icon', iconClassName)} />
     </a>

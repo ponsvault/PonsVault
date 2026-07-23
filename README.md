@@ -1,21 +1,31 @@
-# PonsShare
+# PonsVault
 
-Launch fixed-supply tokens on **Robinhood Chain** through [pons](https://ponsfamily.com) — with optional **social fee sharing** via Privy wallets tied to X handles.
+Launch fixed-supply tokens on **Robinhood Chain** through [pons](https://ponsfamily.com), with a **vault** attached that turns the token's creator fees into an automatic, public rule.
 
-PonsShare is a non-custodial launch layer. Your wallet signs every transaction. We never custody keys or funds.
+PonsVault is a non-custodial launch layer. Your wallet signs every transaction. We never custody keys or funds.
+
+## What a vault is
+
+Every pons token earns creator fees from trading. Normally those fees accrue to the creator's wallet. A vault is a contract that receives them instead and spends them according to a rule fixed at launch:
+
+- **Buyback & Burn** — fees buy the token off the market and burn it (available today)
+- **Staking** — holders stake the token and earn the fees in WETH, pro rata (available today)
+- **Lottery** — fees fund a prize pool paid to a holder each round (planned)
+
+Vault parameters are set once, at launch. None of them has a setter, so nobody can change them afterwards — not the creator, and not us. Triggering a vault is permissionless: anyone can call `run()`, and the vault pays for itself out of the fees it collects.
 
 ## Features
 
-- **Launch** (`/launch`) — pons-style create form, IPFS upload, wallet connect, `launchToken()` tx
-- **Explore** (`/explore`) — recent launches from pons indexer (with on-chain fallback)
-- **Claim** (`/claim`) — fee recipients log in with X and view launches tied to their handle
-- **Fee share** — pre-generate a Privy embedded wallet per X handle at launch time
+- **Launch** (`/launch`) — create form, IPFS upload, wallet connect, vault template picker
+- **Explore** (`/explore`) — recent launches with market data
+- **Token page** (`/launchpad/[token]`) — trade, plus vault config, lifetime burn/harvest stats and a public Run button
+- **Docs** (`/docs`) — how vaults earn, the parameters, and the security model
 
 ## Stack
 
 - Next.js 16 (App Router)
 - wagmi + viem (injected wallet only)
-- Privy (social login + embedded wallets)
+- Foundry (`contracts/`) for the vault, factory and launcher
 - Robinhood Chain (chain ID `4663`)
 
 ## Network (from [docs.ponsfamily.com](https://docs.ponsfamily.com))
@@ -34,14 +44,13 @@ PonsShare is a non-custodial launch layer. Your wallet signs every transaction. 
 
 ### Fee routing (on-chain)
 
-At launch, set `feeWallet` in `launchToken()` metadata. After launch, the locker exposes `feeRedirects(token)` — if zero, fees go to the deployer; otherwise to the redirect address. PonsShare supports:
+At launch, `feeWallet` in the `launchToken()` metadata decides where creator fees go. After launch, the locker exposes `feeRedirects(token)` — if zero, fees go to the deployer; otherwise to the redirect address.
 
-- **Default** — your connected wallet
-- **Share fees** — social account (X/GitHub) or custom wallet address
-  - Social: looks up `fee_share_wallets` by platform + handle; reuses existing wallet or creates one at launch
-  - First login on `/claim` links the stored wallet to Privy so fees can be claimed
+Launching **with** a vault goes through `PonsVaultLauncher`, which becomes the token's on-chain deployer. That is what makes fee collection permissionless: the launcher exposes a public `collect()`, so a vault can sweep its own fees without the creator being involved. The redirect is pointed at the vault, so fees never touch a human wallet.
 
-On-chain reads live in `src/lib/pons/token-state.ts` (`readTokenOnchainMetadata`, `readGraduationStatus`, `readCreatorFeeRouting`).
+Launching **without** a vault goes straight to the pons factory and fees accrue to your own wallet, as usual.
+
+On-chain reads live in `src/lib/pons/token-state.ts` (`readTokenOnchainMetadata`, `readGraduationStatus`, `readCreatorFeeRouting`) and `src/lib/pons/vault-state.ts` (`fetchVaultState`).
 
 ### Indexing
 
@@ -59,39 +68,71 @@ Open http://localhost:3000
 
 ### Environment
 
-See `.env.example` for Privy and Supabase keys. Token images upload through pons (`POST /api/ipfs/image`).
+See `.env.example`. `NEXT_PUBLIC_PONSVAULT_LAUNCHER` must point at the deployed launcher; until it is set, the launch form shows vault templates as unavailable and launches without one.
 
 ### Supabase
+
+Supabase stores a convenience index of launches. It is not a source of truth — every row is verified against the chain before it is written, and the token page reads vault state directly from contracts.
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run `supabase/schema.sql` in **Database → SQL Editor** (fresh setup only — it drops tables)
 3. If Supabase was already live, run `supabase/rls-lockdown.sql` instead to block public writes without deleting data
 4. Copy **Project URL** and **service role key** into `.env.local` and Vercel — never expose the service role key in the browser
-5. Generate a server-only encryption key and add it to `.env.local` and Vercel:
+5. Restart the dev server
 
-```bash
-openssl rand -base64 32
-# → set as FEE_WALLET_ENCRYPTION_KEY (never commit this value)
-```
+**Security:** PonsVault uses Supabase **server-side only** via `SUPABASE_SERVICE_ROLE_KEY`. Do not add open RLS policies in the Supabase dashboard. If the anon key was ever used client-side, rotate it in Supabase → Settings → API and run `supabase/rls-lockdown.sql`.
 
-6. Restart the dev server
-
-**Security:** PonsShare uses Supabase **server-side only** via `SUPABASE_SERVICE_ROLE_KEY`. If explore showed fake “wallet claimed” or overwritten launches, run **`supabase/rls-lockdown.sql`** in the SQL Editor immediately (blocks public anon/authenticated writes + cleans fake rows). Do not add open RLS policies in the Supabase dashboard. Rotate the anon key in Supabase → Settings → API if it was ever exposed client-side.
-
-Fee-share private keys are encrypted with **AES-256-GCM** before they are written to Supabase or local JSON. The decryption key lives only in environment variables.
-
-Without Supabase, launches and fee-share wallets fall back to local JSON under `data/` (gitignored). Fee claim tracking requires Supabase.
+Without Supabase, launches fall back to local JSON under `data/` (gitignored).
 
 ## Launch flow
 
 1. Upload token image → pons `POST /api/ipfs/image` (via `/api/pons/ipfs`) → `ipfs://…`
 2. Read launch config → factory fee, max dev buy, graduation target
-3. Optional fee routing on `launchToken()` metadata:
-   - **Default** — creator fees (70% of trading fees) go to your connected wallet
-   - **Custom wallet** — set `feeWallet` to any Robinhood Chain address
-   - **Social share** — PonsShare generates a wallet and links it to X/GitHub for `/claim`
-4. Sign `launchToken()` on factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB`
+3. Pick a vault template and its parameters, or choose no vault
+4. Sign one transaction:
+   - **With a vault** — `PonsVaultLauncher.launchWithVault()` deploys the token, deploys the vault and points the fee redirect at it
+   - **Without** — `launchToken()` on factory `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB`
 5. Best-effort indexer registration via `/api/pons/verify`
+
+## Keeper
+
+A vault contract cannot wake itself up — nothing on an EVM chain can. Fees pile
+up in the locker until someone sends a transaction, so without a keeper a vault
+does nothing no matter how much it has earned.
+
+The keeper is that someone. It is an ordinary wallet with a little ETH for gas,
+and it holds **no authority over any vault**: `run()` has no owner and no role
+gate, and the locker pays the vault directly, so funds never pass through the
+keeper. Losing the keeper key costs its gas balance and nothing else, and
+switching the keeper off does not strand the fees — anyone can still trigger a
+run from the token page.
+
+```bash
+npm run keeper                       # one pass against KEEPER_URL
+```
+
+On Vercel, `vercel.json` schedules `/api/keeper/tick` and `CRON_SECRET`
+authenticates it. Anywhere else, point cron at `npm run keeper`.
+
+The schedule only decides how often the keeper **looks**. How often it **acts**
+is set by the thresholds, and this matters more than it sounds: a run costs
+about six cents of gas, so a guard that only compares value against gas holds
+nothing back. Without a floor the keeper burns each trickle of fees the moment
+it lands, and the burn history becomes dust instead of legible events.
+
+Which threshold binds depends on the token. On a busy one the **interval**
+does — it always has fees, so the clock sets the cadence. On a quiet one the
+**floor** does, since its interval elapsed long ago. A flat floor would punish
+exactly the tokens that can least afford it, leaving a slow launch showing
+"nothing burned yet" for a week, so the floor drops to `KEEPER_DUST_WETH` once
+a vault has gone `KEEPER_MAX_IDLE_SECONDS` without running.
+
+The interval is measured from the vault's own on-chain `lastRunAt`, so it
+survives restarts and holds even with several schedulers pointed at the same
+deployment.
+
+A creator's own `cooldown` is honoured on top, whenever it is the stricter of
+the two.
 
 ## Costs
 
@@ -101,4 +142,4 @@ Without Supabase, launches and fee-share wallets fall back to local JSON under `
 
 ## Disclaimer
 
-Unofficial layer on pons. Not affiliated with Pons Labs. Tokens are volatile; transactions may be irreversible.
+Unofficial layer on pons. Not affiliated with Pons Labs. Tokens are volatile; transactions may be irreversible. A vault is not a price guarantee — it is funded by trading, so if nothing trades, nothing happens.

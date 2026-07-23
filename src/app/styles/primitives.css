@@ -1,0 +1,477 @@
+/* ==========================================================================
+   PonsVault — design primitives
+
+   Rules this file follows, deliberately:
+   - one easing curve (--ease) and one duration (--dur) for interaction
+   - hairline borders, never heavy strokes
+   - corners of 4-12px; pills only for small controls
+   - the accent appears once or twice per screen, not on every surface
+   ========================================================================== */
+
+/* --- layout -------------------------------------------------------------- */
+
+.pv-shell {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+@media (max-width: 640px) {
+  .pv-shell {
+    padding: 0 20px;
+  }
+}
+
+.pv-shell-narrow {
+  max-width: 760px;
+}
+
+.pv-section {
+  position: relative;
+  padding: 96px 0;
+}
+
+/* full-bleed hairline between stacked sections */
+.pv-rule {
+  height: 1px;
+  border: 0;
+  margin: 0;
+  background: var(--hairline);
+}
+
+/* rules stop at the same edge as the text they separate */
+.pv-rule-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+}
+
+@media (max-width: 640px) {
+  .pv-rule-shell {
+    padding: 0 20px;
+  }
+}
+
+/* --- type ---------------------------------------------------------------- */
+
+.pv-h1 {
+  font-size: clamp(38px, 5.6vw, 64px);
+  font-weight: var(--w-display);
+  line-height: 1.02;
+  letter-spacing: var(--track-display);
+  color: var(--text-primary);
+}
+
+.pv-h2 {
+  font-size: clamp(28px, 3.6vw, 44px);
+  font-weight: var(--w-display);
+  line-height: 1.05;
+  letter-spacing: var(--track-display);
+  color: var(--text-primary);
+}
+
+.pv-h3 {
+  font-size: 16px;
+  font-weight: var(--w-display);
+  line-height: 22px;
+  letter-spacing: -0.014em;
+  color: var(--text-primary);
+}
+
+.pv-body {
+  font-size: 15px;
+  line-height: 24px;
+  letter-spacing: var(--track-body);
+  color: var(--text-muted);
+}
+
+.pv-body-sm {
+  font-size: 13px;
+  line-height: 20px;
+  letter-spacing: -0.006em;
+  color: var(--text-muted);
+}
+
+.pv-measure {
+  max-width: 52ch;
+}
+
+/* section index label, e.g. "01 — How it works" */
+.pv-index {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-subtle);
+}
+
+.pv-index-num {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.pv-mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- controls ------------------------------------------------------------ */
+
+.pv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.006em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
+}
+
+.pv-btn-primary {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.pv-btn-primary:hover {
+  background: var(--accent-hover);
+}
+
+.pv-btn-secondary {
+  border-color: var(--hairline-strong);
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.pv-btn-secondary:hover {
+  background: var(--surface-hover);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
+.pv-btn-lg {
+  height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+/* quiet inline link with a nudging arrow */
+.pv-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--text-muted);
+  text-decoration: none;
+  transition: color var(--dur) var(--ease);
+}
+
+.pv-link:hover {
+  color: var(--text-primary);
+}
+
+.pv-link svg {
+  transition: transform var(--dur) var(--ease);
+}
+
+.pv-link:hover svg {
+  transform: translateX(2px);
+}
+
+.pv-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: var(--radius-xs);
+  border: 1px solid var(--hairline);
+  background: var(--surface);
+  font-size: 11px;
+  font-weight: 450;
+  letter-spacing: 0;
+  color: var(--text-subtle);
+  white-space: nowrap;
+}
+
+.pv-badge-live {
+  border-color: rgba(212, 252, 80, 0.2);
+  background: rgba(212, 252, 80, 0.08);
+  color: var(--accent);
+}
+
+.pv-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+/* --- surfaces ------------------------------------------------------------ */
+
+.pv-card {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.pv-card-interactive:hover {
+  background: var(--surface-hover);
+  border-color: var(--hairline-strong);
+}
+
+.pv-panel {
+  position: relative;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  background: #0f0f0f;
+  overflow: hidden;
+}
+
+/* faux window chrome for product-style panels */
+.pv-panel-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--hairline);
+  background: rgba(255, 255, 255, 0.014);
+}
+
+.pv-panel-bar-label {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 11px;
+  color: var(--text-subtle);
+}
+
+.pv-panel-dots {
+  display: flex;
+  gap: 5px;
+}
+
+.pv-panel-dots span {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* --- backdrop ------------------------------------------------------------ */
+
+/* A single static vignette. No drifting blobs: motion in the background is
+   the fastest way to make a page feel templated. */
+.pv-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.pv-backdrop::before {
+  content: '';
+  position: absolute;
+  top: -40%;
+  left: 50%;
+  width: 120%;
+  height: 120%;
+  transform: translateX(-50%);
+  background: radial-gradient(
+    ellipse 50% 40% at 50% 30%,
+    rgba(212, 252, 80, 0.035),
+    transparent 70%
+  );
+}
+
+.pv-backdrop-grid::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000, transparent 72%);
+}
+
+/* --- motion -------------------------------------------------------------- */
+
+@keyframes pv-flow {
+  from {
+    stroke-dashoffset: 26;
+  }
+  to {
+    stroke-dashoffset: -300;
+  }
+}
+
+@keyframes pv-blink {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.pv-pulse-dot {
+  animation: pv-blink 2.4s var(--ease) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pv-pulse-dot,
+  .vf-flow {
+    animation: none !important;
+  }
+
+  .pv-btn,
+  .pv-card,
+  .pv-link,
+  .pv-link svg {
+    transition: none !important;
+  }
+}
+
+/* --- nav ----------------------------------------------------------------- */
+
+.nav {
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+}
+
+.nav.is-scrolled {
+  background: rgba(13, 13, 13, 0.8);
+  backdrop-filter: blur(12px) saturate(150%);
+  border-bottom: 1px solid var(--hairline);
+}
+
+.nav-inner {
+  max-width: 1200px;
+  padding: 0 32px;
+}
+
+@media (max-width: 640px) {
+  .nav-inner {
+    padding: 0 20px;
+  }
+}
+
+.pv-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  text-decoration: none;
+}
+
+.pv-brand-mark {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.pv-brand-text {
+  font-size: 14px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+/* nav links: 13px, muted, no pill container */
+.nav-product-links {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  background: none;
+}
+
+.nav-product-link {
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 400;
+  text-decoration: none;
+  transition: color var(--dur) var(--ease);
+}
+
+.nav-product-link:hover {
+  color: var(--text-primary);
+  background: none;
+}
+
+.nav-product-link.is-active {
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.social-x-link {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  background: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-subtle);
+  transition: color var(--dur) var(--ease);
+}
+
+.social-x-link:hover {
+  color: var(--text-primary);
+  background: none;
+  border: 0;
+}
+
+.social-x-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.nav-connect {
+  height: 32px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: var(--w-display);
+  border-radius: var(--radius-pill);
+  transition: background var(--dur) var(--ease);
+}
+
+.nav-address {
+  height: 32px;
+  padding: 0 10px;
+  border-color: var(--hairline-strong);
+  font-size: 13px;
+}
+
+.nav-address-avatar {
+  width: 20px;
+  height: 20px;
+  font-size: 9px;
+}

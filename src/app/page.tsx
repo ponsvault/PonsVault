@@ -1,258 +1,392 @@
 import Link from 'next/link';
-import {
-  ArrowRight,
-  Coins,
-  Rocket,
-  Share2,
-  Shield,
-  Sparkles,
-  Users,
-  Wallet,
-} from 'lucide-react';
-
-import { PONSSHARE_X_URL, XLogo } from '@/components/x-social-link';
+import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { Reveal } from '@/components/ui/reveal';
+import { VaultPanel } from '@/components/vault-panel';
+import { VaultFlow } from '@/components/vault-flow';
 
 export default function HomePage() {
   return (
-    <main className="home-page">
-      <section className="home-hero">
-        <div className="home-hero-glow" aria-hidden="true" />
-        <div className="home-container home-hero-inner">
-          <p className="home-eyebrow">
-            <Sparkles className="h-3.5 w-3.5" />
-            Launch on pons · Share creator fees
-          </p>
-          <h1 className="home-title">
-            Launch tokens on Robinhood Chain.
-            <span className="home-title-accent"> Share fees with any X account.</span>
-          </h1>
-          <p className="home-lead">
-            PonsShare is a non-custodial launch layer for pons — create tokens from your
-            wallet, optionally route 70% creator fees to a Privy wallet tied to an X handle, and
-            let them claim later.
-          </p>
-          <div className="home-actions">
-            <Link href="/launch" className="home-btn home-btn-primary">
-              Launch a token
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            <Link href="/explore" className="home-btn home-btn-secondary">
-              Explore launches
-            </Link>
-            <Link href="/claim" className="home-btn home-btn-secondary">
-              Claim fees
-            </Link>
-          </div>
-          <dl className="home-stats">
-            <div>
-              <dt>Launch fee</dt>
-              <dd>0.0005 ETH</dd>
-            </div>
-            <div>
-              <dt>Creator share</dt>
-              <dd>70%</dd>
-            </div>
-            <div>
-              <dt>Graduation</dt>
-              <dd>4.2 ETH</dd>
-            </div>
-            <div>
-              <dt>Chain</dt>
-              <dd>Robinhood · 4663</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <section className="home-section">
-        <div className="home-container">
-          <div className="home-showcase">
-            <div className="home-showcase-copy">
-              <p className="home-section-label">Why PonsShare</p>
-              <h2 className="home-section-title">
-                Everything pons launches need — plus social fee routing.
-              </h2>
-              <p className="home-section-body">
-                Use the same factory, metadata flow, and pool as pons. Add an
-                optional fee-share wallet for collaborators, promoters, or creators who should
-                earn on launch day without connecting a wallet first.
-              </p>
-              <ul className="home-checklist">
-                <li>Token image upload via pons IPFS</li>
-                <li>On-chain launch when pons APIs are blocked</li>
-                <li>Privy pre-generated wallets per X handle</li>
-                <li>Claim dashboard for fee recipients</li>
-              </ul>
-            </div>
-
-            <div className="home-showcase-card" aria-hidden="true">
-              <div className="home-mock-shell">
-                <div className="home-mock-form">
-                  <span className="home-mock-title">Launch token</span>
-                  <div className="home-mock-row">
-                    <span className="home-mock-field" />
-                    <span className="home-mock-field" />
-                  </div>
-                  <span className="home-mock-field home-mock-field-wide" />
-                  <span className="home-mock-upload" />
-                  <span className="home-mock-share">
-                    <Share2 className="h-3.5 w-3.5" />
-                    Fee share → @creator
-                  </span>
-                  <span className="home-mock-btn">Launch token</span>
-                </div>
-                <div className="home-mock-preview">
-                  <span className="home-mock-preview-title">Your token</span>
-                  <span className="home-mock-preview-line">Launch fee · 0.0005</span>
-                  <span className="home-mock-preview-line">Trading fees · 70% / 30%</span>
-                  <span className="home-mock-preview-line">Graduation · 4.2 ETH</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="home-section home-section-muted">
-        <div className="home-container">
-          <p className="home-section-label">How it works</p>
-          <h2 className="home-section-title">Three steps from idea to shared fees.</h2>
-          <div className="home-steps">
-            <Step
-              number="01"
-              icon={Rocket}
-              title="Launch on pons"
-              body="Connect your wallet, upload artwork to IPFS, and sign launchToken on the pons factory."
-            />
-            <Step
-              number="02"
-              icon={Share2}
-              title="Share with X"
-              body="Optional: assign creator fees to an X handle. We pre-generate a Privy embedded wallet for them."
-            />
-            <Step
-              number="03"
-              icon={Coins}
-              title="Claim later"
-              body="The fee recipient logs in with X on the Claim page and accesses their launch history and wallet."
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="home-section">
-        <div className="home-container">
-          <p className="home-section-label">Built for builders</p>
-          <h2 className="home-section-title">Non-custodial by design.</h2>
-          <div className="home-features">
-            <Feature
-              icon={Wallet}
-              title="Wallet-native"
-              body="Every launch is a transaction you sign. PonsShare never holds keys or funds."
-            />
-            <Feature
-              icon={Users}
-              title="Social fee split"
-              body="Assign creator fees to an X-linked Privy wallet at launch time — recipients can claim later without connecting a wallet first."
-            />
-            <Feature
-              icon={Shield}
-              title="Resilient stack"
-              body="Falls back to on-chain reads and the public Robinhood RPC when pons APIs are unreachable."
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="home-cta">
-        <div className="home-container home-cta-inner">
-          <div>
-            <h2 className="home-cta-title">Ready to launch?</h2>
-            <p className="home-cta-body">
-              Open the launchpad, connect your wallet on Robinhood Chain, and ship your token in
-              minutes.
-            </p>
-          </div>
-          <Link href="/launch" className="home-btn home-btn-primary">
-            Open launchpad
-            <ArrowRight className="h-4 w-4" />
-          </Link>
-        </div>
-      </section>
-
-      <footer className="home-footer">
-        <div className="home-container home-footer-inner">
-          <div>
-            <p className="home-footer-brand">PonsShare</p>
-            <p className="home-footer-note">
-              Unofficial layer on pons. Not affiliated with Pons Labs. Transactions are
-              wallet-signed and may be irreversible.
-            </p>
-          </div>
-          <nav className="home-footer-links" aria-label="Footer">
-            <Link href="/launch">Launch</Link>
-            <Link href="/explore">Explore</Link>
-            <Link href="/claim">Claim</Link>
-            <Link href="/docs">Docs</Link>
-            <a href="https://ponsfamily.com" target="_blank" rel="noreferrer">
-              pons
-            </a>
-            <a
-              href={PONSSHARE_X_URL}
-              target="_blank"
-              rel="noreferrer"
-              className="home-footer-x-link"
-              aria-label="PonsShare on X"
-            >
-              <XLogo className="home-footer-x-icon" />
-              @ponsshare
-            </a>
-          </nav>
-        </div>
-      </footer>
+    <main className="pv-home">
+      <Hero />
+      <Rule />
+      <Mechanic />
+      <Rule />
+      <Templates />
+      <Rule />
+      <Steps />
+      <Rule />
+      <Guarantees />
+      <Rule />
+      <FinalCta />
+      <Footer />
     </main>
   );
 }
 
-function Step({
-  number,
-  icon: Icon,
-  title,
-  body,
-}: {
-  number: string;
-  icon: typeof Rocket;
-  title: string;
-  body: string;
-}) {
+function Rule() {
   return (
-    <article className="home-step">
-      <div className="home-step-top">
-        <span className="home-step-number">{number}</span>
-        <Icon className="h-4 w-4 text-[var(--accent)]" strokeWidth={1.75} />
-      </div>
-      <h3 className="home-step-title">{title}</h3>
-      <p className="home-step-body">{body}</p>
-    </article>
+    <div className="pv-rule-shell">
+      <hr className="pv-rule" />
+    </div>
   );
 }
 
-function Feature({
-  icon: Icon,
-  title,
-  body,
-}: {
-  icon: typeof Wallet;
-  title: string;
-  body: string;
-}) {
+function Hero() {
   return (
-    <article className="home-feature">
-      <div className="home-feature-icon">
-        <Icon className="h-4 w-4" strokeWidth={1.75} />
+    <section className="pv-hero">
+      <div className="pv-backdrop pv-backdrop-grid" />
+      <div className="pv-shell pv-hero-inner">
+        <Reveal>
+          <h1 className="pv-h1 pv-hero-title">
+            Launch your token
+            <br />
+            with a vault attached
+          </h1>
+        </Reveal>
+
+        <Reveal delay={0.06}>
+          <div className="pv-hero-sub">
+            <p className="pv-body pv-hero-lead">
+              A vault layer for pons launches on Robinhood Chain. Decide what your creator fees do,
+              and let the contract enforce it.
+            </p>
+            <div className="pv-hero-actions">
+              <Link href="/launch" className="pv-btn pv-btn-primary pv-btn-lg">
+                Pick a vault
+                <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+              <Link href="/docs" className="pv-btn pv-btn-secondary pv-btn-lg">
+                Documentation
+              </Link>
+            </div>
+          </div>
+        </Reveal>
+
+        <Reveal delay={0.12} className="pv-hero-visual">
+          <VaultPanel />
+          <p className="pv-body-sm pv-hero-caption">
+            One example — a Buyback &amp; Burn vault. Each template has its own controls and its own
+            rule.
+          </p>
+        </Reveal>
       </div>
-      <h3 className="home-feature-title">{title}</h3>
-      <p className="home-feature-body">{body}</p>
-    </article>
+    </section>
+  );
+}
+
+const FACTS: [string, string][] = [
+  ['Chain', 'Robinhood · 4663'],
+  ['Fee asset', 'WETH'],
+  ['Trigger', 'Permissionless'],
+  ['Operator keys', 'None'],
+];
+
+function Mechanic() {
+  return (
+    <section className="pv-section">
+      <div className="pv-shell">
+        <Reveal>
+          <p className="pv-index">
+            <span className="pv-index-num">01</span>
+            How a vault works
+          </p>
+          <h2 className="pv-h2 pv-section-title">
+            Your fees stop being a payout.
+            <br />
+            They start doing a job.
+          </h2>
+          <p className="pv-body pv-measure pv-section-lead">
+            On a normal launch, creator fees leave the moment someone claims them. A vault holds them
+            instead and spends them on the rule you picked at launch — on a schedule nobody controls.
+          </p>
+        </Reveal>
+
+        <Reveal delay={0.08}>
+          <div className="pv-diagram">
+            <header className="pv-diagram-head">
+              <span className="pv-body-sm">Buyback &amp; Burn</span>
+              <span className="pv-badge">Example template</span>
+            </header>
+            <VaultFlow burnBps={8000} />
+          </div>
+        </Reveal>
+
+        <Reveal delay={0.12}>
+          <dl className="pv-facts">
+            {FACTS.map(([label, value]) => (
+              <div key={label} className="pv-fact">
+                <dt className="pv-body-sm">{label}</dt>
+                <dd className="pv-fact-value">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+const TEMPLATES = [
+  {
+    name: 'Buyback & Burn',
+    status: 'live' as const,
+    body: 'Fees buy your token off the open market and send it to the burn address. Supply falls with volume.',
+    params: ['Burn share', 'Treasury split', 'Wait between runs', 'Price check'],
+  },
+  {
+    name: 'Staking',
+    status: 'live' as const,
+    body: 'Holders stake your token and earn the fees in WETH, split by share of the pool. Real yield, and supply locked up while it earns.',
+    params: ['Lock period', 'Minimum payout', 'Wait between payouts'],
+  },
+  {
+    name: 'Lottery',
+    status: 'soon' as const,
+    body: 'Fees accumulate into a prize pool and pay out to a holder drawn on-chain each round.',
+    params: ['Round length', 'Prize share', 'Eligibility', 'Draw source'],
+  },
+];
+
+function Templates() {
+  return (
+    <section className="pv-section">
+      <div className="pv-shell">
+        <Reveal>
+          <p className="pv-index">
+            <span className="pv-index-num">02</span>
+            Templates
+          </p>
+          <h2 className="pv-h2 pv-section-title">Pick a vault. Ship it with your token.</h2>
+          <p className="pv-body pv-measure pv-section-lead">
+            Each template is a small contract behind a shared beacon, so your token gets its own
+            instance without paying for its own deployment.
+          </p>
+        </Reveal>
+
+        <div className="pv-tpl-list">
+          {TEMPLATES.map((template, index) => (
+            <Reveal key={template.name} delay={index * 0.05}>
+              <article className="pv-tpl">
+                <div className="pv-tpl-main">
+                  <div className="pv-tpl-head">
+                    <h3 className="pv-h3">{template.name}</h3>
+                    {template.status === 'live' ? (
+                      <span className="pv-badge pv-badge-live">
+                        <span className="pv-dot" />
+                        Live
+                      </span>
+                    ) : (
+                      <span className="pv-badge">In development</span>
+                    )}
+                  </div>
+                  <p className="pv-body pv-tpl-body">{template.body}</p>
+                </div>
+                <ul className="pv-tpl-params">
+                  {template.params.map((param) => (
+                    <li key={param} className="pv-mono">
+                      {param}
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+const STEPS = [
+  {
+    title: 'Connect on Robinhood Chain',
+    body: 'Your wallet stays yours. Every transaction is signed by you, from your own address.',
+  },
+  {
+    title: 'Choose your vault',
+    body: 'Pick a template and set its parameters — shares, destinations, cooldown, price bounds. They are written once.',
+  },
+  {
+    title: 'Launch through pons',
+    body: 'The token deploys through the pons factory and its creator fees are routed to the vault at creation.',
+  },
+  {
+    title: 'Let it run',
+    body: 'As trades accrue fees, anyone can trigger a run — you, a holder, or a bot. The vault does the rest.',
+  },
+];
+
+function Steps() {
+  return (
+    <section className="pv-section">
+      <div className="pv-shell">
+        <Reveal>
+          <p className="pv-index">
+            <span className="pv-index-num">03</span>
+            Launching
+          </p>
+          <h2 className="pv-h2 pv-section-title">Four steps, one signature each.</h2>
+        </Reveal>
+
+        <ol className="pv-steps">
+          {STEPS.map((step, index) => (
+            <Reveal key={step.title} as="li" delay={index * 0.05}>
+              <span className="pv-mono pv-step-num">{String(index + 1).padStart(2, '0')}</span>
+              <h3 className="pv-h3">{step.title}</h3>
+              <p className="pv-body-sm pv-step-body">{step.body}</p>
+            </Reveal>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+const GUARANTEES = [
+  {
+    title: 'Nobody controls the trigger',
+    body: 'Running a vault is open to every address, so it cannot be quietly switched off or timed to benefit an insider.',
+  },
+  {
+    title: 'Immutable parameters',
+    body: 'Shares, destinations and cooldown are written at creation. There is no setter to change them afterwards.',
+  },
+  {
+    title: 'Fees never touch a wallet',
+    body: 'Collected fees move from the pons locker into the vault. No intermediary address can intercept them.',
+  },
+  {
+    title: 'Buys skip manipulated prices',
+    body: 'If someone pushes the price right before a buyback, the vault waits rather than overpaying.',
+  },
+  {
+    title: 'Outcomes are verifiable',
+    body: 'Burns, prizes and splits are ordinary transfers. Whatever your template does, anyone can audit it from chain data alone.',
+  },
+  {
+    title: 'No keeper subscription',
+    body: 'There is no off-chain service to pay for or trust. The contract is the entire dependency.',
+  },
+];
+
+function Guarantees() {
+  return (
+    <section className="pv-section">
+      <div className="pv-shell">
+        <Reveal>
+          <p className="pv-index">
+            <span className="pv-index-num">04</span>
+            Guarantees
+          </p>
+          <h2 className="pv-h2 pv-section-title">What the contract enforces.</h2>
+        </Reveal>
+
+        <div className="pv-guarantees">
+          {GUARANTEES.map((item, index) => (
+            <Reveal key={item.title} delay={(index % 3) * 0.05}>
+              <div className="pv-guarantee">
+                <h3 className="pv-h3">{item.title}</h3>
+                <p className="pv-body-sm pv-guarantee-body">{item.body}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function FinalCta() {
+  return (
+    <section className="pv-cta">
+      <div className="pv-shell">
+        <Reveal>
+          <div className="pv-cta-inner">
+            <div>
+              <h2 className="pv-h2">Give your token a reason to hold.</h2>
+              <p className="pv-body pv-cta-body">
+                Connect, choose a vault, and launch. It starts working with your first trade.
+              </p>
+            </div>
+            <Link href="/launch" className="pv-btn pv-btn-primary pv-btn-lg">
+              Launch a token
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
+const FOOTER_LINKS: { heading: string; links: { label: string; href: string; external?: boolean }[] }[] = [
+  {
+    heading: 'Product',
+    links: [
+      { label: 'Launch', href: '/launch' },
+      { label: 'Explore', href: '/explore' },
+      { label: 'Templates', href: '/docs#templates' },
+    ],
+  },
+  {
+    heading: 'Docs',
+    links: [
+      { label: 'How vaults work', href: '/docs#vaults' },
+      { label: 'Parameters', href: '/docs#parameters' },
+      { label: 'Security model', href: '/docs#security' },
+    ],
+  },
+  {
+    heading: 'Ecosystem',
+    links: [
+      { label: 'pons', href: 'https://ponsfamily.com', external: true },
+      { label: 'Robinhood Chain', href: 'https://robinhood.com', external: true },
+    ],
+  },
+];
+
+function Footer() {
+  return (
+    <footer className="pv-footer">
+      <div className="pv-shell">
+        <div className="pv-footer-top">
+          <div className="pv-footer-brand">
+            <span className="pv-brand-mark">P</span>
+            <p className="pv-body-sm pv-footer-tagline">
+              A vault layer for pons launches. Independent of pons and Robinhood.
+            </p>
+          </div>
+          <div className="pv-footer-cols">
+            {FOOTER_LINKS.map((column) => (
+              <div key={column.heading}>
+                <h3 className="pv-footer-heading">{column.heading}</h3>
+                <ul>
+                  {column.links.map((link) => (
+                    <li key={link.label}>
+                      {link.external ? (
+                        <a href={link.href} target="_blank" rel="noreferrer" className="pv-link">
+                          {link.label}
+                          <ArrowUpRight className="h-3 w-3" />
+                        </a>
+                      ) : (
+                        <Link href={link.href} className="pv-link">
+                          {link.label}
+                        </Link>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="pv-footer-bottom">
+          <span className="pv-body-sm">PonsVault</span>
+          <span className="pv-body-sm">
+            Unaudited software. Launching a token risks total loss.
+          </span>
+        </div>
+      </div>
+    </footer>
   );
 }
