@@ -7,8 +7,8 @@ import Link from 'next/link';
 import type { Address } from 'viem';
 
 import { TokenCreatorFeesPanel } from '@/components/token-creator-fees-panel';
-import { FeeShareBadges } from '@/components/fee-share-badge';
 import { TokenPriceChart } from '@/components/token-price-chart';
+import { TokenVaultPanel } from '@/components/token-vault-panel';
 import { fetchTokenDetail } from '@/lib/pons/api';
 import { txUrl } from '@/lib/pons/launch';
 import {
@@ -113,9 +113,6 @@ export function TokenDetail({ token }: TokenDetailProps) {
                   </span>
                 </div>
                 <p className="token-detail-symbol">${data.metadata.symbol}</p>
-                {data.feeShare ? (
-                  <FeeShareBadges className="fee-share-badges mt-2" info={data.feeShare} />
-                ) : null}
               </div>
             </div>
 
@@ -149,6 +146,13 @@ export function TokenDetail({ token }: TokenDetailProps) {
               />
             </div>
           </div>
+
+          <TokenVaultPanel
+            token={token}
+            symbol={data.metadata.symbol}
+            pendingCreatorWeth={data.fees.creatorRewards?.creatorWeth ?? null}
+            pendingCreatorToken={data.fees.creatorRewards?.creatorToken ?? null}
+          />
 
           <TokenCreatorFeesPanel token={token} detail={data} onClaimed={() => refetch()} />
 
@@ -261,14 +265,6 @@ export function TokenDetail({ token }: TokenDetailProps) {
                       </a>
                     </dd>
                   </div>
-                  {data.feeShare ? (
-                    <div>
-                      <dt>Fee sharing</dt>
-                      <dd>
-                        <FeeShareBadges info={data.feeShare} className="fee-share-badges inline" />
-                      </dd>
-                    </div>
-                  ) : null}
                   <div>
                     <dt>Dev buy</dt>
                     <dd>{data.launch.initialBuyEth || '0'} ETH</dd>

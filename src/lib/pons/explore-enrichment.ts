@@ -1,11 +1,54 @@
-import type { Address } from 'viem';
+import { formatEther, type Address } from 'viem';
 
+import { robinhoodPublicClient } from './client';
 import { PONS_TOTAL_SUPPLY } from './constants';
 import { resolveLaunchedToken } from './factory';
 import { readPoolMarketSnapshot } from './pricing';
 import { readGraduationStatus, readTokenOnchainMetadata } from './token-state';
 import { isToken0Ordering } from './trades';
-import type { PonsLaunchRecord } from './types';
+import type { PonsLaunchRecord, VaultStat } from './types';
+import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from './vault-state';
+
+/**
+ * The headline number for a launch's vault, or null when it has none.
+ *
+ * Read here rather than on the client so an explore card can show what a vault
+ * has actually done without every card opening its own RPC connection.
+ */
+async function readVaultStat(vault: string | null | undefined): Promise<{ vaultStat: VaultStat | null }> {
+  if (!vault) return { vaultStat: null };
+  const address = vault as Address;
+
+  try {
+    const template = await robinhoodPublicClient
+      .readContract({ address, abi: PONS_VAULT_ABI, functionName: 'template' })
+      .catch(() => 'buyback-burn');
+
+    const amountWei =
+      template === 'staking'
+        ? await robinhoodPublicClient.readContract({
+            address,
+            abi: PONS_STAKING_VAULT_ABI,
+            functionName: 'totalStaked',
+          })
+        : await robinhoodPublicClient.readContract({
+            address,
+            abi: PONS_VAULT_ABI,
+            functionName: 'totalTokensBurned',
+          });
+
+    return {
+      vaultStat: {
+        kind: template === 'staking' ? 'stake' : 'burn',
+        amount: formatEther(amountWei),
+        // Both sides are wei. PONS_TOTAL_SUPPLY is the fixed 1e9 × 1e18 supply.
+        percent: (Number(amountWei) / Number(PONS_TOTAL_SUPPLY)) * 100,
+      },
+    };
+  } catch {
+    return { vaultStat: null };
+  }
+}
 
 export async function enrichLaunchRecord(
   launch: Pick<
@@ -19,8 +62,8 @@ export async function enrichLaunchRecord(
     | 'launchedAt'
     | 'transactionHash'
     | 'feeWallet'
-    | 'feeSharePlatform'
-    | 'feeShareHandle'
+    | 'vault'
+    | 'vaultTemplate'
   >,
 ): Promise<PonsLaunchRecord> {
   const token = launch.token as Address;
@@ -35,17 +78,19 @@ export async function enrichLaunchRecord(
     const supplyWei = resolved?.launched.supply ?? BigInt(PONS_TOTAL_SUPPLY);
     const factory = resolved?.factory;
 
-    const [market, graduation] = await Promise.all([
+    const [market, graduation, vaultStats] = await Promise.all([
       readPoolMarketSnapshot({
         pool: metadata.pool,
         isToken0,
         supplyWei,
       }),
       factory ? readGraduationStatus(token, factory) : readGraduationStatus(token),
+      readVaultStat(launch.vault),
     ]);
 
     return {
       ...launch,
+      ...vaultStats,
       pool: metadata.pool,
       marketCapUsd: market.marketCapUsd,
       priceUsd: market.priceUsd,
@@ -77,8 +122,8 @@ export async function enrichLaunchRecords(
       | 'launchedAt'
       | 'transactionHash'
       | 'feeWallet'
-      | 'feeSharePlatform'
-      | 'feeShareHandle'
+      | 'vault'
+      | 'vaultTemplate'
     >
   >,
 ): Promise<PonsLaunchRecord[]> {

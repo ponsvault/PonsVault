@@ -1,3 +1,19 @@
+import type { VaultTemplateId } from './vault';
+
+/**
+ * A vault's headline number for list views.
+ *
+ * Templates measure themselves differently — one removes supply, another locks
+ * it up — so the unit travels with the number rather than being assumed.
+ */
+export interface VaultStat {
+  kind: 'burn' | 'stake';
+  /** Whole-token decimal string. */
+  amount: string;
+  /** Share of total supply, 0-100. */
+  percent: number;
+}
+
 export interface PonsLaunchpadStatus {
   chainId: number;
   factory: string;
@@ -38,9 +54,10 @@ export interface PonsLaunchRecord {
   logo: string;
   deployer: string;
   feeWallet?: string;
-  feeSharePlatform?: 'twitter' | 'github' | null;
-  feeShareHandle?: string | null;
-  feeWalletClaimed?: boolean;
+  vault?: string | null;
+  vaultTemplate?: VaultTemplateId | null;
+  /** What the vault has done so far, in whichever terms its template works in. */
+  vaultStat?: VaultStat | null;
   pool: string;
   launchedAt: string;
   marketCapUsd: number | null;
@@ -49,8 +66,6 @@ export interface PonsLaunchRecord {
   graduationProgressPct: number | null;
   transactionHash: string;
 }
-
-import type { SocialPlatform } from '@/lib/fee-share/types';
 
 export interface TokenDetailTrade {
   transactionHash: string;
@@ -123,13 +138,6 @@ export interface TokenDetailResponse {
       source: 'pons' | 'unavailable';
     } | null;
   };
-  feeShare: {
-    feeWallet: string;
-    deployer: string;
-    feeSharePlatform: 'twitter' | 'github' | null;
-    feeShareHandle: string | null;
-    walletClaimed: boolean;
-  } | null;
   trades: TokenDetailTrade[];
 }
 
@@ -151,9 +159,17 @@ export interface LaunchFormInput {
   telegram: string;
   website: string;
   devBuyEth: string;
-  useFeeShare: boolean;
-  feeShareMode: 'social' | 'wallet';
-  feeSharePlatform: SocialPlatform;
-  feeShareHandle: string;
-  feeShareWallet: string;
+  /** Which vault template to attach, or 'none' to keep fees in your wallet. */
+  vaultTemplate: VaultTemplateId;
+  /** Shared by every template. */
+  vaultCooldownHours: string;
+  vaultMinHarvestEth: string;
+  /** Buyback & Burn only. */
+  vaultBurnPercent: string;
+  vaultTreasury: string;
+  vaultTwapWindowSeconds: string;
+  /** How far the live price may sit from the average before a buyback skips, in percent. */
+  vaultMaxPriceSwingPercent: string;
+  /** Staking only. Days a stake is locked, counted from the staker's deposit. */
+  vaultStakingLockDays: string;
 }

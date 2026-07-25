@@ -1,31 +1,52 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight } from 'lucide-react';
+import { ArrowUpRight, Coins, Flame, Rocket } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 
-import { FeeShareBadges } from '@/components/fee-share-badge';
+import { Reveal } from '@/components/ui/reveal';
 import { fetchRecentLaunches } from '@/lib/pons/api';
+import { VAULT_TEMPLATES } from '@/lib/pons/vault';
 import { cn, formatUsd, ipfsToGateway } from '@/lib/utils';
+
+/** Compact token count: 14391858.74 → "14.4M". */
+function formatCompact(value: string): string {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount === 0) return '0';
+  if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(2)}B`;
+  if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`;
+  if (amount >= 1_000) return `${(amount / 1_000).toFixed(1)}K`;
+  return amount.toFixed(0);
+}
+
+function templateName(id: string | null | undefined): string | null {
+  return VAULT_TEMPLATES.find((entry) => entry.id === id)?.name ?? null;
+}
 
 export function ExploreGrid() {
   const { data = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ['ponsshare-launches'],
+    queryKey: ['ponsvault-launches'],
     queryFn: fetchRecentLaunches,
     refetchInterval: 20_000,
   });
 
   if (isLoading) {
-    return <p className="text-sm text-zinc-400">Loading recent launches…</p>;
+    return (
+      <div className="pv-explore-grid">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <div key={index} className="pv-skeleton-card" />
+        ))}
+      </div>
+    );
   }
 
   if (isError) {
     return (
-      <div className="launchpad-alert">
-        Failed to load launches.{' '}
-        <button type="button" className="underline" onClick={() => refetch()}>
-          Retry
+      <div className="pv-error" style={{ marginBottom: 80 }}>
+        <span>Could not load launches right now.</span>
+        <button type="button" className="pv-error-retry" onClick={() => refetch()}>
+          Try again
         </button>
       </div>
     );
@@ -33,100 +54,123 @@ export function ExploreGrid() {
 
   if (data.length === 0) {
     return (
-      <div className="rounded-xl border border-white/[0.08] bg-[rgba(255,255,255,0.03)] p-6">
-        <p className="text-sm text-[var(--text-muted)]">
-          No tokens launched through PonsShare yet.
+      <div className="pv-empty" style={{ marginBottom: 80 }}>
+        <span className="pv-empty-icon">
+          <Rocket className="h-6 w-6" strokeWidth={1.75} />
+        </span>
+        <p className="pv-empty-title">No launches yet</p>
+        <p className="pv-empty-body">
+          Nothing has been launched through PonsVault so far. Be the first token with a vault
+          attached from block one.
         </p>
-        <Link href="/launch" className="mt-3 inline-block text-sm text-[var(--accent)] hover:underline">
-          Launch the first one →
+        <Link href="/launch" className="pv-btn pv-btn-primary">
+          Launch the first one
+          <ArrowUpRight className="h-4 w-4" />
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      {data.map((launch) => {
-        const detailsHref = `/launchpad/${launch.token}`;
+    <div className="pv-explore-grid">
+      {data.map((launch, index) => {
         const progress = launch.graduationProgressPct ?? 0;
+        const template = templateName(launch.vaultTemplate);
+        const stat = launch.vaultStat;
+        const statAmount = stat ? Number(stat.amount) : 0;
 
         return (
-          <article
-            key={launch.token}
-            className="explore-card rounded-3xl border border-white/10 bg-zinc-950/70 p-4 transition hover:border-lime-300/30"
-          >
-            <Link href={detailsHref} className="explore-card-link">
-              <div className="flex items-start gap-3">
-                <div className="relative h-12 w-12 overflow-hidden rounded-xl bg-zinc-800">
-                  {launch.logo ? (
-                    <Image
-                      src={ipfsToGateway(launch.logo)}
-                      alt={launch.name}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
-                  ) : null}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <h2 className="truncate font-semibold text-white">{launch.name}</h2>
-                  <p className="text-sm text-zinc-400">${launch.symbol}</p>
-                </div>
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-xs',
-                    launch.graduated
-                      ? 'bg-lime-300/15 text-lime-300'
-                      : 'bg-zinc-800 text-zinc-400',
-                  )}
-                >
-                  {launch.graduated ? 'Graduated' : 'Climbing'}
-                </span>
-              </div>
+          <Reveal key={launch.token} delay={Math.min(index, 5) * 0.04}>
+            <article className="pv-token-card">
+              <Link href={`/launchpad/${launch.token}`} className="pv-token-link">
+                <div className="pv-token-head">
+                  <div className="pv-token-logo">
+                    {launch.logo ? (
+                      <Image
+                        src={ipfsToGateway(launch.logo)}
+                        alt={launch.name}
+                        fill
+                        className="object-cover"
+                        unoptimized
+                      />
+                    ) : (
+                      <span className="pv-token-logo-fallback">
+                        {launch.symbol?.slice(0, 2).toUpperCase() ?? '??'}
+                      </span>
+                    )}
+                  </div>
 
-              <p className="mt-3 line-clamp-2 text-sm text-zinc-500">{launch.description}</p>
+                  <div className="pv-token-names">
+                    <h2 className="pv-token-name">{launch.name}</h2>
+                    <p className="pv-token-symbol">${launch.symbol}</p>
+                  </div>
 
-              {launch.feeWallet ? (
-                <FeeShareBadges
-                  className="fee-share-badges mt-3"
-                  info={{
-                    feeWallet: launch.feeWallet,
-                    deployer: launch.deployer,
-                    feeSharePlatform: launch.feeSharePlatform,
-                    feeShareHandle: launch.feeShareHandle,
-                    walletClaimed: launch.feeWalletClaimed,
-                  }}
-                />
-              ) : null}
-
-              <dl className="explore-card-stats">
-                <div>
-                  <dt>Price</dt>
-                  <dd>{formatUsd(launch.priceUsd, 6)}</dd>
+                  <span
+                    className={cn('pv-token-status', launch.graduated && 'pv-token-status-live')}
+                  >
+                    {launch.graduated ? 'Graduated' : 'Climbing'}
+                  </span>
                 </div>
-                <div>
-                  <dt>Market cap</dt>
-                  <dd>{formatUsd(launch.marketCapUsd, 0)}</dd>
-                </div>
-                <div>
-                  <dt>Graduation</dt>
-                  <dd>{launch.graduationProgressPct != null ? `${progress.toFixed(0)}%` : '—'}</dd>
-                </div>
-              </dl>
 
-              <div className="explore-card-progress">
-                <div
-                  className="explore-card-progress-fill"
-                  style={{ width: `${Math.min(progress, 100)}%` }}
-                />
-              </div>
+                <p className="pv-token-desc">{launch.description}</p>
 
-              <span className="explore-card-details">
-                Token details
-                <ArrowUpRight className="h-3.5 w-3.5" />
-              </span>
-            </Link>
-          </article>
+                {template ? (
+                  <div className="pv-token-vault">
+                    <span className="pv-token-vault-template">{template}</span>
+                    {stat && statAmount > 0 ? (
+                      <span className="pv-token-vault-burn">
+                        {stat.kind === 'stake' ? (
+                          <Coins className="h-3 w-3" strokeWidth={2} />
+                        ) : (
+                          <Flame className="h-3 w-3" strokeWidth={2} />
+                        )}
+                        {formatCompact(stat.amount)} {launch.symbol}{' '}
+                        {stat.kind === 'stake' ? 'staked' : 'burned'} ·{' '}
+                        {stat.percent.toFixed(2)}%
+                      </span>
+                    ) : (
+                      <span className="pv-token-vault-idle">
+                        {stat?.kind === 'stake' ? 'Nobody staked yet' : 'Nothing burned yet'}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="pv-token-vault">
+                    <span className="pv-token-vault-none">No vault · fees go to the creator</span>
+                  </div>
+                )}
+
+                <dl className="pv-token-stats">
+                  <div>
+                    <dt>Price</dt>
+                    <dd>{formatUsd(launch.priceUsd, 6)}</dd>
+                  </div>
+                  <div>
+                    <dt>Market cap</dt>
+                    <dd>{formatUsd(launch.marketCapUsd, 0)}</dd>
+                  </div>
+                  <div>
+                    <dt>Graduation</dt>
+                    <dd>
+                      {launch.graduationProgressPct != null ? `${progress.toFixed(0)}%` : '—'}
+                    </dd>
+                  </div>
+                </dl>
+
+                <div className="pv-token-progress">
+                  <div
+                    className="pv-token-progress-fill"
+                    style={{ width: `${Math.min(progress, 100)}%` }}
+                  />
+                </div>
+
+                <div className="pv-token-foot">
+                  <span>View token</span>
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                </div>
+              </Link>
+            </article>
+          </Reveal>
         );
       })}
     </div>

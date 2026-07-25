@@ -1,10 +1,10 @@
 'use client';
 
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { Coins, Loader2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { formatEther, type Address } from 'viem';
-import { useAccount, useWalletClient } from 'wagmi';
+import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 
 import { robinhoodChain } from '@/lib/pons/chain';
 import {
@@ -14,6 +14,7 @@ import {
   isCreatorFeeClaimant,
 } from '@/lib/pons/creator-fees';
 import { PONS_LOCKER_ABI } from '@/lib/pons/token-state';
+import { fetchVaultState } from '@/lib/pons/vault-state';
 import type { TokenDetailResponse } from '@/lib/pons/types';
 import { cn, explorerAddressUrl, formatUsd, shortAddress } from '@/lib/utils';
 
@@ -26,7 +27,16 @@ interface TokenCreatorFeesPanelProps {
 export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreatorFeesPanelProps) {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const publicClient = usePublicClient();
   const [error, setError] = useState('');
+
+  // Shares react-query's cache with TokenVaultPanel, so this costs no extra RPC.
+  const { data: vaultState } = useQuery({
+    queryKey: ['token-vault', token],
+    queryFn: () => fetchVaultState(publicClient!, token),
+    enabled: !!publicClient,
+    refetchInterval: 20_000,
+  });
 
   const rewards = detail.fees.creatorRewards;
   const deployer = detail.launch?.deployer as Address | undefined;
@@ -162,6 +172,13 @@ export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreator
             'Claim fees'
           )}
         </button>
+      ) : vaultState ? (
+        <p className="token-creator-fees-note">
+          A vault owns these fees — there is nothing to claim. The figures above are gross; the{' '}
+          {detail.fees.creatorSharePercent}% creator share of them goes to the vault above, which{' '}
+          {vaultState.template === 'staking' ? 'pays it out to stakers' : 'buys and burns with it'}.
+          Anyone can trigger that.
+        </p>
       ) : (
         <p className="token-creator-fees-note">
           Connect the deployer or payout wallet to claim creator fees.

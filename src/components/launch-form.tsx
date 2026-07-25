@@ -1,8 +1,9 @@
 'use client';
 
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ImageIcon, Loader2 } from 'lucide-react';
+import { ChevronDown, ImageIcon, Loader2 } from 'lucide-react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import {
@@ -19,8 +20,6 @@ import {
   uploadTokenImage,
   verifyLaunchedToken,
 } from '@/lib/pons/api';
-import { resolveSocialFeeWallet, lookupSocialFeeWallet } from '@/lib/fee-share/api';
-import { isValidSocialHandle } from '@/lib/fee-share/social';
 import { robinhoodChain } from '@/lib/pons/chain';
 import { ROBINHOOD_RPC_URL } from '@/lib/pons/constants';
 import {
@@ -35,6 +34,7 @@ import {
   encodeLaunchTransaction,
   extractLaunchedToken,
   formatMaxDevBuyEth,
+  generateLaunchSalt,
   isValidIpfsUri,
   isValidTelegramHandle,
   isValidTokenName,
@@ -46,8 +46,22 @@ import {
   validateLaunchInput,
 } from '@/lib/pons/launch';
 import { computeMaxDevBuyWei } from '@/lib/pons/max-dev-buy';
+import {
+  BUYBACK_BURN_DEFAULTS,
+  STAKING_DEFAULTS,
+  STAKING_MAX_LOCK_DAYS,
+  VAULT_TEMPLATES,
+  encodeLaunchWithVaultTransaction,
+  extractVaultLaunch,
+  isVaultLauncherDeployed,
+  validateVaultInput,
+  vaultLauncherAddress,
+  type VaultTemplateId,
+} from '@/lib/pons/vault';
 import type { LaunchFormInput } from '@/lib/pons/types';
 import { cn, ipfsToGateway, shortAddress } from '@/lib/utils';
+
+const vaultsAvailable = isVaultLauncherDeployed();
 
 const emptyForm: LaunchFormInput = {
   name: '',
@@ -58,11 +72,14 @@ const emptyForm: LaunchFormInput = {
   telegram: '',
   website: '',
   devBuyEth: '',
-  useFeeShare: false,
-  feeShareMode: 'social',
-  feeSharePlatform: 'twitter',
-  feeShareHandle: '',
-  feeShareWallet: '',
+  vaultTemplate: vaultsAvailable ? 'buyback-burn' : 'none',
+  vaultBurnPercent: BUYBACK_BURN_DEFAULTS.burnPercent,
+  vaultTreasury: '',
+  vaultCooldownHours: BUYBACK_BURN_DEFAULTS.cooldownHours,
+  vaultMinHarvestEth: BUYBACK_BURN_DEFAULTS.minHarvestEth,
+  vaultTwapWindowSeconds: BUYBACK_BURN_DEFAULTS.twapWindowSeconds,
+  vaultMaxPriceSwingPercent: BUYBACK_BURN_DEFAULTS.maxPriceSwingPercent,
+  vaultStakingLockDays: STAKING_DEFAULTS.lockDays,
 };
 
 const GAS_BUFFER = 50_000_000_000_000n;
@@ -94,6 +111,7 @@ export function LaunchForm() {
   const [isLaunching, setIsLaunching] = useState(false);
   const [statusText, setStatusText] = useState('');
   const [ipfsAccepted, setIpfsAccepted] = useState(false);
+  const [vaultAdvancedOpen, setVaultAdvancedOpen] = useState(false);
   const router = useRouter();
 
   const { data: status, isLoading: statusLoading } = useQuery({
@@ -133,28 +151,35 @@ export function LaunchForm() {
     isValidTokenSymbol(form.symbol) &&
     isValidXHandle(form.twitter) &&
     isValidTelegramHandle(form.telegram) &&
-    isValidWebsiteUrl(form.website) &&
-    (!form.useFeeShare ||
-      (form.feeShareMode === 'wallet'
-        ? isValidEthAddress(form.feeShareWallet)
-        : isValidSocialHandle(form.feeSharePlatform, form.feeShareHandle)));
+    isValidWebsiteUrl(form.website);
 
   const validationError = useMemo(
     () => validateLaunchInput(form, status),
     [form, status],
   );
 
-  const socialHandleReady =
-    form.useFeeShare &&
-    form.feeShareMode === 'social' &&
-    isValidSocialHandle(form.feeSharePlatform, form.feeShareHandle);
+  const vaultConfigError = useMemo(() => validateVaultInput(form), [form]);
 
-  const { data: socialWalletLookup, isFetching: socialWalletLookupLoading } = useQuery({
-    queryKey: ['fee-share-wallet-lookup', form.feeSharePlatform, form.feeShareHandle],
-    queryFn: () => lookupSocialFeeWallet(form.feeSharePlatform, form.feeShareHandle),
-    enabled: socialHandleReady,
-    staleTime: 30_000,
-  });
+  const burnSharePercent = Number(form.vaultBurnPercent);
+  const treasuryInvalid =
+    form.vaultTemplate === 'buyback-burn' &&
+    burnSharePercent < 100 &&
+    form.vaultTreasury.trim().length > 0 &&
+    !isValidEthAddress(form.vaultTreasury);
+
+  const lockDaysLabel = useMemo(() => {
+    const days = Number(form.vaultStakingLockDays || '0');
+    if (!Number.isFinite(days) || days < 0) return 'Zero or more.';
+    if (days === 0) return 'No lock — stakers can withdraw whenever they want.';
+    if (days > STAKING_MAX_LOCK_DAYS) return `At most ${STAKING_MAX_LOCK_DAYS} days.`;
+    return `Withdrawals open ${days === 1 ? 'a day' : `${days} days`} after a deposit. Rewards stay claimable throughout.`;
+  }, [form.vaultStakingLockDays]);
+
+  const selectedVault = VAULT_TEMPLATES.find((entry) => entry.id === form.vaultTemplate);
+
+  function selectVault(id: VaultTemplateId) {
+    setForm((f) => ({ ...f, vaultTemplate: id }));
+  }
 
   const primaryAction = useMemo(() => {
     if (!isConnected) {
@@ -183,6 +208,9 @@ export function LaunchForm() {
     if (!hasValidDetails) {
       return { label: 'Fill token details', disabled: true, mode: 'launch' as const, blocked: true };
     }
+    if (vaultConfigError) {
+      return { label: 'Check vault settings', disabled: true, mode: 'launch' as const, blocked: true };
+    }
     if (devBuyTooHigh) {
       return { label: 'Developer buy too high', disabled: true, mode: 'launch' as const, blocked: true };
     }
@@ -206,6 +234,7 @@ export function LaunchForm() {
     status,
     statusText,
     uploadMutation.isPending,
+    vaultConfigError,
   ]);
 
   async function handleImageChange(file: File | null) {
@@ -261,30 +290,29 @@ export function LaunchForm() {
     setIsLaunching(true);
     setStatusText('Preparing transaction…');
 
-    try {
-      let feeWalletOverride: `0x${string}` | undefined;
-      if (form.useFeeShare) {
-        if (form.feeShareMode === 'wallet') {
-          feeWalletOverride = normalizeEthAddress(form.feeShareWallet);
-        } else {
-          setStatusText('Resolving social fee wallet…');
-          const resolved = await resolveSocialFeeWallet(
-            form.feeSharePlatform,
-            form.feeShareHandle,
-          );
-          feeWalletOverride = resolved.walletAddress;
-        }
-      }
+    const withVault = form.vaultTemplate !== 'none';
 
-      const metadata = buildLaunchMetadata(form, address, feeWalletOverride);
+    try {
+      // With a vault, the launcher becomes the token's deployer and fee wallet so
+      // it can re-point the locker's redirect at the vault; without one, fees
+      // stay with the launching wallet.
+      const metadata = buildLaunchMetadata(
+        form,
+        address,
+        withVault ? vaultLauncherAddress() : undefined,
+      );
       const value = computeLaunchValue(status, form.devBuyEth);
-      const data = encodeLaunchTransaction(metadata, status, form.devBuyEth);
+      const salt = generateLaunchSalt(metadata.symbol);
+
+      const data = withVault
+        ? encodeLaunchWithVaultTransaction(metadata, form, salt)
+        : encodeLaunchTransaction(metadata, status, form.devBuyEth, salt);
 
       setStatusText('Confirm in your wallet…');
       const hash = await walletClient.sendTransaction({
         account: address,
         chain: robinhoodChain,
-        to: PONS_FACTORY,
+        to: withVault ? vaultLauncherAddress() : PONS_FACTORY,
         value,
         data,
       });
@@ -296,7 +324,9 @@ export function LaunchForm() {
         transport: http(ROBINHOOD_RPC_URL),
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
-      const token = extractLaunchedToken(receipt);
+
+      const vaultLaunch = withVault ? extractVaultLaunch(receipt) : null;
+      const token = vaultLaunch?.token ?? extractLaunchedToken(receipt);
 
       if (!token) {
         throw new Error('Launch transaction confirmed but token address was not found in logs.');
@@ -319,34 +349,13 @@ export function LaunchForm() {
           description: metadata.description,
           logo: metadata.logo,
           deployer: address,
-          feeWallet: metadata.feeWallet,
-          feeSharePlatform:
-            form.useFeeShare && form.feeShareMode === 'social'
-              ? form.feeSharePlatform
-              : undefined,
-          feeShareHandle:
-            form.useFeeShare && form.feeShareMode === 'social'
-              ? form.feeShareHandle
-              : undefined,
+          // On a vault launch the locker pays the vault, so that is what the
+          // record's fee wallet has to be for on-chain verification to pass.
+          feeWallet: vaultLaunch?.vault ?? metadata.feeWallet,
           transactionHash: hash,
           launchedAt: new Date().toISOString(),
         }),
       }).catch(() => undefined);
-
-      if (form.useFeeShare && form.feeShareMode === 'social' && form.feeShareHandle.trim()) {
-        await fetch('/api/fee-share/record', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            platform: form.feeSharePlatform,
-            handle: form.feeShareHandle,
-            token,
-            symbol: metadata.symbol,
-            name: metadata.name,
-            transactionHash: hash,
-          }),
-        }).catch(() => undefined);
-      }
 
       setStatusText('Opening token page…');
       router.push(`/launchpad/${token}`);
@@ -376,7 +385,7 @@ export function LaunchForm() {
     <div className="split-shell float launchpad-create-shell">
       <div className="split-shell-form launchpad-create-form">
         <header className="launchpad-create-header">
-          <h1 className="split-shell-title">Launch token</h1>
+          <h2 className="split-shell-title">Launch token</h2>
         </header>
 
         <div className="launchpad-form">
@@ -526,161 +535,253 @@ export function LaunchForm() {
           </label>
 
           <div className="launchpad-field launchpad-field-wide">
-            <label className="launchpad-field-note">
-              <input
-                type="checkbox"
-                checked={form.useFeeShare}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, useFeeShare: e.target.checked }))
-                }
-              />
-              Share creator fees through socials or wallet
-            </label>
-            {form.useFeeShare ? (
-              <div className="launchpad-fee-share mt-3">
-                <div className="launchpad-fee-share-caution" role="note">
-                  <p className="launchpad-fee-share-caution-title">How pons fee sharing works</p>
-                  <p>
-                    When you set a fee wallet, pons sends both the <strong>developer buy tokens</strong>{' '}
-                    and future <strong>creator trading fees</strong> to that wallet in one launch
-                    transaction. This is pons protocol design — not a PonsShare override.
-                  </p>
-                  <p>
-                    You still pay the ETH for the dev buy from your launcher wallet, but the tokens from
-                    that buy go to the fee recipient. Set dev buy to 0 if you want to keep no tokens for
-                    yourself.
-                  </p>
-                </div>
-                <div className="launchpad-fee-share-platforms mt-3">
-                  <button
-                    type="button"
-                    aria-pressed={form.feeShareMode === 'social'}
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        feeShareMode: 'social',
-                      }))
-                    }
-                    className={cn(
-                      'launchpad-fee-mode',
-                      form.feeShareMode === 'social' && 'is-active',
-                    )}
-                  >
-                    Social
-                  </button>
-                  <button
-                    type="button"
-                    aria-pressed={form.feeShareMode === 'wallet'}
-                    onClick={() =>
-                      setForm((f) => ({
-                        ...f,
-                        feeShareMode: 'wallet',
-                      }))
-                    }
-                    className={cn(
-                      'launchpad-fee-mode',
-                      form.feeShareMode === 'wallet' && 'is-active',
-                    )}
-                  >
-                    Wallet
-                  </button>
-                </div>
+            <span className="launchpad-label">Vault</span>
+            <p className="launchpad-field-note">
+              Decides what happens to this token&apos;s creator fees. Fixed at launch —{' '}
+              <Link href="/docs#vaults" className="link">
+                read how vaults work
+              </Link>
+              .
+            </p>
 
-                {form.feeShareMode === 'wallet' ? (
+            <div className="vault-picker" role="radiogroup" aria-label="Vault template">
+              {VAULT_TEMPLATES.map((template) => {
+                const selectable =
+                  template.status === 'available' &&
+                  (template.id === 'none' || vaultsAvailable);
+                const selected = form.vaultTemplate === template.id;
+
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={!selectable}
+                    onClick={() => selectVault(template.id)}
+                    className={cn('vault-option', selected && 'is-selected')}
+                  >
+                    <span className="vault-option-head">
+                      <span className="vault-option-name">{template.name}</span>
+                      {template.status === 'soon' ? (
+                        <span className="pv-badge">Soon</span>
+                      ) : !selectable ? (
+                        <span className="pv-badge">Not deployed</span>
+                      ) : null}
+                    </span>
+                    <span className="vault-option-tagline">{template.tagline}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {form.vaultTemplate === 'buyback-burn' ? (
+            <div className="launchpad-field launchpad-field-wide vault-config">
+              <div className="vault-config-row">
+                <label className="launchpad-field">
+                  <span className="launchpad-label">Burn share</span>
+                  <span className="launchpad-prefixed-input">
+                    <input
+                      inputMode="decimal"
+                      value={form.vaultBurnPercent}
+                      onChange={(e) =>
+                        setForm((f) => ({ ...f, vaultBurnPercent: e.target.value }))
+                      }
+                      aria-label="Percentage of fees spent on buyback and burn"
+                    />
+                    <span className="vault-suffix">%</span>
+                  </span>
+                  <p className="launchpad-field-note">
+                    {burnSharePercent >= 100
+                      ? 'Everything is burned. No treasury needed.'
+                      : `${(100 - burnSharePercent).toFixed(burnSharePercent % 1 === 0 ? 0 : 2)}% goes to the treasury.`}
+                  </p>
+                </label>
+
+                <label className="launchpad-field">
+                  <span className="launchpad-label">
+                    Treasury {burnSharePercent >= 100 ? '(not needed)' : ''}
+                  </span>
                   <input
-                    className="launchpad-input mt-3 font-mono text-sm"
-                    value={form.feeShareWallet}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, feeShareWallet: e.target.value }))
-                    }
+                    className="launchpad-input"
+                    value={form.vaultTreasury}
+                    onChange={(e) => setForm((f) => ({ ...f, vaultTreasury: e.target.value }))}
                     placeholder="0x…"
+                    disabled={burnSharePercent >= 100}
                     autoComplete="off"
                     spellCheck={false}
-                    aria-label="Fee recipient wallet address"
+                    aria-label="Treasury address receiving the remaining fees"
                   />
-                ) : (
-                  <>
-                    <div className="launchpad-fee-share-platforms mt-3">
-                      <button
-                        type="button"
-                        aria-label="Share fees on X"
-                        aria-pressed={form.feeSharePlatform === 'twitter'}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            feeSharePlatform: 'twitter',
-                            feeShareHandle: '',
-                          }))
-                        }
-                        className={cn(
-                          'launchpad-fee-platform',
-                          form.feeSharePlatform === 'twitter' && 'is-active',
-                        )}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true" className="launchpad-fee-platform-icon">
-                          <path
-                            fill="currentColor"
-                            d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
-                          />
-                        </svg>
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Share fees on GitHub"
-                        aria-pressed={form.feeSharePlatform === 'github'}
-                        onClick={() =>
-                          setForm((f) => ({
-                            ...f,
-                            feeSharePlatform: 'github',
-                            feeShareHandle: '',
-                          }))
-                        }
-                        className={cn(
-                          'launchpad-fee-platform',
-                          form.feeSharePlatform === 'github' && 'is-active',
-                        )}
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true" className="launchpad-fee-platform-icon">
-                          <path
-                            fill="currentColor"
-                            d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"
-                          />
-                        </svg>
-                      </button>
-                    </div>
-                    <input
-                      className="launchpad-input mt-3"
-                      value={form.feeShareHandle}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, feeShareHandle: e.target.value }))
-                      }
-                      placeholder={
-                        form.feeSharePlatform === 'github'
-                          ? 'github_username'
-                          : 'creator_handle'
-                      }
-                      autoComplete="off"
-                      spellCheck={false}
-                      aria-label={
-                        form.feeSharePlatform === 'github'
-                          ? 'GitHub username for fee sharing'
-                          : 'X handle for fee sharing'
-                      }
-                    />
-                    {socialHandleReady ? (
-                      <p className="launchpad-field-note mt-2">
-                        {socialWalletLookupLoading
-                          ? 'Checking for an existing fee wallet…'
-                          : socialWalletLookup?.exists
-                            ? `Using existing wallet ${shortAddress(socialWalletLookup.walletAddress ?? '', 6)}. They can claim by logging in with this account.`
-                            : 'No wallet yet — one will be created and saved for this account at launch.'}
-                      </p>
-                    ) : null}
-                  </>
-                )}
+                  <p
+                    className={cn(
+                      'launchpad-field-note',
+                      treasuryInvalid && 'is-error',
+                    )}
+                  >
+                    {treasuryInvalid
+                      ? 'Enter a valid address, or set the burn share to 100%.'
+                      : burnSharePercent >= 100
+                        ? 'Unused while everything is burned.'
+                        : 'Receives whatever is not burned.'}
+                  </p>
+                </label>
               </div>
-            ) : null}
-          </div>
+
+              <div className="launchpad-disclosure">
+                <button
+                  type="button"
+                  className="launchpad-advanced-toggle"
+                  onClick={() => setVaultAdvancedOpen((open) => !open)}
+                  aria-expanded={vaultAdvancedOpen}
+                >
+                  <span className="launchpad-advanced-title">Advanced vault settings</span>
+                  <span
+                    className={cn(
+                      'launchpad-advanced-chevron',
+                      vaultAdvancedOpen && 'is-open',
+                    )}
+                  >
+                    <ChevronDown className="h-4 w-4" strokeWidth={1.75} />
+                  </span>
+                </button>
+
+                {vaultAdvancedOpen ? (
+                  <div className="launchpad-advanced">
+                    <p className="launchpad-field-note">
+                      These stop someone from pushing the price right before the vault buys. The
+                      defaults are what we test with — they cannot be changed after launch.
+                    </p>
+                    <div className="vault-config-row">
+                      <label className="launchpad-field">
+                        <span className="launchpad-label">Wait between runs (hours)</span>
+                        <input
+                          className="launchpad-input"
+                          inputMode="decimal"
+                          value={form.vaultCooldownHours}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, vaultCooldownHours: e.target.value }))
+                          }
+                        />
+                        <p className="launchpad-field-note">
+                          Shortest gap before the vault can buy again.
+                        </p>
+                      </label>
+
+                      <label className="launchpad-field">
+                        <span className="launchpad-label">Minimum fees before a run (ETH)</span>
+                        <input
+                          className="launchpad-input"
+                          inputMode="decimal"
+                          value={form.vaultMinHarvestEth}
+                          onChange={(e) =>
+                            setForm((f) => ({ ...f, vaultMinHarvestEth: e.target.value }))
+                          }
+                        />
+                        <p className="launchpad-field-note">
+                          Waits until at least this much has built up, so runs are worth the gas.
+                        </p>
+                      </label>
+
+                      <label className="launchpad-field">
+                        <span className="launchpad-label">Price check window (seconds)</span>
+                        <input
+                          className="launchpad-input"
+                          inputMode="numeric"
+                          value={form.vaultTwapWindowSeconds}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              vaultTwapWindowSeconds: e.target.value,
+                            }))
+                          }
+                        />
+                        <p className="launchpad-field-note">
+                          How long to average the price before checking it. Default 300 = 5 minutes.
+                          At least 60.
+                        </p>
+                      </label>
+
+                      <label className="launchpad-field">
+                        <span className="launchpad-label">Max price swing (%)</span>
+                        <input
+                          className="launchpad-input"
+                          inputMode="decimal"
+                          value={form.vaultMaxPriceSwingPercent}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              vaultMaxPriceSwingPercent: e.target.value,
+                            }))
+                          }
+                        />
+                        <p className="launchpad-field-note">
+                          Skips the buy if the live price is farther than this from the average.
+                          Default 2%. At least 0.5%.
+                        </p>
+                      </label>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {form.vaultTemplate === 'staking' ? (
+            <div className="launchpad-field launchpad-field-wide vault-config">
+              <p className="launchpad-field-note">
+                Holders who stake earn the creator fees in WETH, split by how much they have
+                staked. Nothing is minted and no supply is burned — stakers are paid the fees the
+                pool actually generates.
+              </p>
+
+              <div className="vault-config-row">
+                <label className="launchpad-field">
+                  <span className="launchpad-label">Lock period (days)</span>
+                  <input
+                    className="launchpad-input"
+                    inputMode="decimal"
+                    value={form.vaultStakingLockDays}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vaultStakingLockDays: e.target.value }))
+                    }
+                    aria-label="Days a stake is locked before it can be withdrawn"
+                  />
+                  <p className="launchpad-field-note">
+                    {lockDaysLabel}
+                  </p>
+                </label>
+
+                <label className="launchpad-field">
+                  <span className="launchpad-label">Minimum fees before a payout (ETH)</span>
+                  <input
+                    className="launchpad-input"
+                    inputMode="decimal"
+                    value={form.vaultMinHarvestEth}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vaultMinHarvestEth: e.target.value }))
+                    }
+                  />
+                  <p className="launchpad-field-note">
+                    Lets fees build up instead of paying out dust.
+                  </p>
+                </label>
+
+                <label className="launchpad-field">
+                  <span className="launchpad-label">Wait between payouts (hours)</span>
+                  <input
+                    className="launchpad-input"
+                    inputMode="decimal"
+                    value={form.vaultCooldownHours}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vaultCooldownHours: e.target.value }))
+                    }
+                  />
+                  <p className="launchpad-field-note">Minimum gap between payouts.</p>
+                </label>
+              </div>
+            </div>
+          ) : null}
 
           <div className="launchpad-field launchpad-field-wide">
             <span className="launchpad-label">Developer buy</span>
@@ -797,6 +898,33 @@ export function LaunchForm() {
             <dt>Trading fees</dt>
             <dd>70% creator / 30% protocol</dd>
           </div>
+          <div>
+            <dt>Vault</dt>
+            <dd>{selectedVault?.name ?? 'No vault'}</dd>
+          </div>
+          {form.vaultTemplate === 'buyback-burn' ? (
+            <div>
+              <dt>Creator fees</dt>
+              <dd>
+                {Number.isFinite(burnSharePercent)
+                  ? burnSharePercent >= 100
+                    ? '100% burned'
+                    : `${burnSharePercent}% burned / ${100 - burnSharePercent}% treasury`
+                  : '—'}
+              </dd>
+            </div>
+          ) : null}
+          {form.vaultTemplate === 'staking' ? (
+            <div>
+              <dt>Creator fees</dt>
+              <dd>
+                Paid to stakers
+                {Number(form.vaultStakingLockDays || '0') > 0
+                  ? ` · ${form.vaultStakingLockDays}d lock`
+                  : ' · no lock'}
+              </dd>
+            </div>
+          ) : null}
           <div>
             <dt>Graduation</dt>
             <dd>

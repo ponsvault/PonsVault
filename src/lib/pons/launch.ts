@@ -11,8 +11,6 @@ import {
   type TransactionReceipt,
 } from 'viem';
 
-import { isValidGithubHandle, isValidTwitterHandle } from '@/lib/fee-share/social';
-
 import { PONS_LAUNCHPAD_ABI } from './abi';
 import {
   PONS_DEFAULT_CONFIG_ID,
@@ -23,6 +21,7 @@ import {
 } from './constants';
 import { computeMaxDevBuyWei, formatMaxDevBuyEth } from './max-dev-buy';
 import type { LaunchFormInput, PonsLaunchMetadata, PonsLaunchpadStatus } from './types';
+import { validateVaultInput } from './vault';
 
 const TOKEN_NAME_RE = /^[A-Za-z0-9 ]+$/;
 const TOKEN_SYMBOL_RE = /^[A-Za-z0-9]+$/;
@@ -178,34 +177,8 @@ export function validateLaunchInput(
     return 'Website must be a valid http(s) URL.';
   }
 
-  if (input.useFeeShare) {
-    if (input.feeShareMode === 'wallet') {
-      if (!input.feeShareWallet.trim()) {
-        return 'Enter the wallet address that should receive creator fees.';
-      }
-      if (!isValidEthAddress(input.feeShareWallet)) {
-        return 'Fee recipient wallet address is invalid.';
-      }
-    } else {
-      if (!input.feeShareHandle.trim()) {
-        return input.feeSharePlatform === 'github'
-          ? 'Enter the GitHub username that should receive fees.'
-          : 'Enter the X handle that should receive fees.';
-      }
-      if (
-        input.feeSharePlatform === 'twitter' &&
-        !isValidTwitterHandle(input.feeShareHandle)
-      ) {
-        return 'Fee share X handle is invalid.';
-      }
-      if (
-        input.feeSharePlatform === 'github' &&
-        !isValidGithubHandle(input.feeShareHandle)
-      ) {
-        return 'Fee share GitHub username is invalid.';
-      }
-    }
-  }
+  const vaultError = validateVaultInput(input);
+  if (vaultError) return vaultError;
 
   if (status) {
     const devBuyWei = parseDevBuyWei(input.devBuyEth);

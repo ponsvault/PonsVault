@@ -1,9 +1,5 @@
 import { formatEther, type Address } from 'viem';
 
-import { getPonsShareLaunchByToken } from '@/lib/launch-registry/store';
-import { listClaimedFeeShareWalletKeys } from '@/lib/fee-share/registry';
-import { feeShareWalletKey } from '@/lib/fee-share/social';
-import type { SocialPlatform } from '@/lib/fee-share/types';
 import { PONS_TOTAL_SUPPLY } from './constants';
 import { fetchCreatorFees } from './creator-fees';
 import { robinhoodPublicClient } from './client';
@@ -16,13 +12,6 @@ import {
   readTokenOnchainMetadata,
 } from './token-state';
 import type { TokenDetailResponse } from './types';
-
-function narrowFeeSharePlatform(
-  platform: SocialPlatform | null | undefined,
-): 'twitter' | 'github' | null {
-  if (platform === 'twitter' || platform === 'github') return platform;
-  return null;
-}
 
 export async function fetchTokenDetail(token: Address): Promise<TokenDetailResponse> {
   const [metadata, resolved] = await Promise.all([
@@ -84,7 +73,7 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
     creatorPayout: deployerAddress,
   }));
 
-  const [creatorFees, locker, launchRecord, claimedWalletKeys] = await Promise.all([
+  const [creatorFees, locker] = await Promise.all([
     fetchCreatorFees(token).catch(() => null),
     factory
       ? robinhoodPublicClient
@@ -103,34 +92,7 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
           })
           .catch(() => null)
       : Promise.resolve(null),
-    getPonsShareLaunchByToken(token).catch(() => null),
-    listClaimedFeeShareWalletKeys().catch(() => new Set<string>()),
   ]);
-
-  const walletClaimed =
-    launchRecord?.feeSharePlatform && launchRecord.feeShareHandle
-      ? claimedWalletKeys.has(
-          feeShareWalletKey(launchRecord.feeSharePlatform, launchRecord.feeShareHandle),
-        )
-      : false;
-
-  const feeShare = launchRecord
-    ? {
-        feeWallet: launchRecord.feeWallet,
-        deployer: launchRecord.deployer,
-        feeSharePlatform: narrowFeeSharePlatform(launchRecord.feeSharePlatform),
-        feeShareHandle: launchRecord.feeShareHandle ?? null,
-        walletClaimed,
-      }
-    : feeRouting.creatorPayout.toLowerCase() !== deployerAddress.toLowerCase()
-      ? {
-          feeWallet: feeRouting.creatorPayout,
-          deployer: deployerAddress,
-          feeSharePlatform: null,
-          feeShareHandle: null,
-          walletClaimed: false,
-        }
-      : null;
 
   return {
     token,
@@ -182,7 +144,6 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
           }
         : null,
     },
-    feeShare,
     trades: tradesWithUsd.map((trade) => ({
       ...trade,
       blockNumber: trade.blockNumber.toString(),
