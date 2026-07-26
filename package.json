@@ -1,21 +1,20 @@
 {
-  "name": "ponsshare",
+  "name": "ponsvault",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "keeper": "node --env-file-if-exists=.env.local scripts/keeper-tick.mjs"
   },
   "dependencies": {
-    "@privy-io/node": "^0.26.0",
-    "@privy-io/react-auth": "^3.35.0",
-    "@privy-io/server-auth": "^1.32.5",
     "@supabase/supabase-js": "^2.110.7",
     "@tanstack/react-query": "^5.101.2",
     "clsx": "^2.1.1",
     "lucide-react": "^1.24.0",
+    "motion": "^12.42.2",
     "next": "16.2.10",
     "react": "19.2.4",
     "react-dom": "19.2.4",
