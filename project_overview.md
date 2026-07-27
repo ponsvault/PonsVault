@@ -493,6 +493,13 @@ three-field buyback `Config` and two-field staking `Config` straight off vaults
 built by these factories. The reason it still has to be redeployed before launch is
 the exposed owner key, nothing about the code.
 
+All eight are verified on Blockscout. `contracts/verify-all.sh` does the whole set
+and `contracts/check-verified.sh` confirms it against the API, which is worth doing
+rather than trusting forge: Blockscout serves a **verified twin** for any address
+whose bytecode matches an already-verified contract, so the second beacon looked
+verified purely because the first one was, and forge's own pre-check skipped it.
+`--skip-is-verified-check` is what forces a real submission.
+
 ---
 
 ## 9. Templates
@@ -556,8 +563,6 @@ off the roadmap as an active build.
 **Known gaps**
 
 - `canRun()` and `totalWethHarvested` (§4) — fix on the next upgrade.
-- Contracts are unverified on Blockscout (deliberately, to keep the branding off
-  a throwaway deployment).
 - SBX is orphaned. It was launched by the first launcher, so the current one's
   `vaultOf(SBX)` returns zero and its panel does not render. Its 1,458,415 stranded
   tokens are unrecoverable — see §2.
