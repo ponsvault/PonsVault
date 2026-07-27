@@ -39,7 +39,7 @@ contract PonsStakingVault is PonsVaultBase {
     event Unstaked(address indexed account, uint256 amount);
     event RewardsClaimed(address indexed account, uint256 wethAmount, uint256 tokenAmount);
     event RewardsDistributed(uint256 wethAmount, uint256 tokenAmount, uint256 totalStaked);
-    event Configured(uint32 lockPeriod, uint256 minHarvestWei, uint32 cooldown);
+    event Configured(uint32 lockPeriod, uint256 minHarvestWei);
 
     /// @dev Fixed-point scale for the per-share accumulators. Deliberately far above the usual
     ///      1e12/1e18: a meme token's staked supply runs to ~1e26, and each of the two divisions
@@ -58,12 +58,12 @@ contract PonsStakingVault is PonsVaultBase {
     uint32 private constant MAX_LOCK_PERIOD = 365 days;
 
     /// @param lockPeriod Seconds a stake is locked, measured from the staker's most recent deposit.
-    /// @param minHarvestWei Minimum WETH a harvest must yield before {run} will act.
-    /// @param cooldown Minimum seconds between successful runs.
+    /// @param minHarvestWei Minimum WETH a harvest must yield before {run} will act. This is the
+    ///        only pacing control: a run distributes everything it harvests, so the next one cannot
+    ///        happen until trading has accrued this much again.
     struct Config {
         uint32 lockPeriod;
         uint256 minHarvestWei;
-        uint32 cooldown;
     }
 
     /// @param amount Tokens currently staked.
@@ -117,7 +117,7 @@ contract PonsStakingVault is PonsVaultBase {
         __PonsVaultBase_init(_token, _locker, _collector);
         if (_config.lockPeriod > MAX_LOCK_PERIOD) revert InvalidLockPeriod();
         config = _config;
-        emit Configured(_config.lockPeriod, _config.minHarvestWei, _config.cooldown);
+        emit Configured(_config.lockPeriod, _config.minHarvestWei);
     }
 
     /* ---------------------------------------------------------------------- */
@@ -202,16 +202,21 @@ contract PonsStakingVault is PonsVaultBase {
     /// @dev Permissionless. Reverts when nobody is staked, which deliberately leaves the fees
     ///      unclaimed in the locker rather than stranding them here: the whole call rolls back,
     ///      so the first run after someone stakes collects the entire backlog for them.
+    ///
+    ///      Distributes everything present that nobody already has a claim on, rather than only
+    ///      what this call's harvest returned. The difference is not cosmetic:
+    ///      {PonsVaultLauncher-collect} is public, so anyone can make the locker pay this vault
+    ///      without going through {run}. Keying the distribution on the harvest delta would credit
+    ///      nothing in that case and leave the money here permanently — present in the balance, but
+    ///      owed to nobody and never reached by a later run.
     /// @return wethDistributed WETH credited to stakers.
     /// @return tokenDistributed Tokens credited to stakers.
     function run() external nonReentrant returns (uint256 wethDistributed, uint256 tokenDistributed) {
         Config memory cfg = config;
 
-        uint256 readyAt = lastRunAt + cfg.cooldown;
-        // forge-lint: disable-next-line(block-timestamp)
-        if (lastRunAt != 0 && block.timestamp < readyAt) revert CooldownActive(readyAt);
+        _harvest();
 
-        (wethDistributed, tokenDistributed) = _harvest();
+        (wethDistributed, tokenDistributed) = unencumberedBalances();
         if (wethDistributed < cfg.minHarvestWei || wethDistributed == 0) revert NothingToHarvest();
 
         uint256 staked = totalStaked;
@@ -240,12 +245,6 @@ contract PonsStakingVault is PonsVaultBase {
     ///      "nothing structural is in the way" rather than "there are fees to distribute".
     ///      Callers needing a definitive answer should simulate {run}.
     function canRun() external view returns (bool ready, string memory reason) {
-        Config memory cfg = config;
-
-        // forge-lint: disable-next-line(block-timestamp)
-        if (lastRunAt != 0 && block.timestamp < lastRunAt + cfg.cooldown) {
-            return (false, "Cooldown active");
-        }
         if (totalStaked == 0) {
             return (false, "Nobody is staked yet");
         }

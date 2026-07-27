@@ -49,7 +49,7 @@ contract PonsStakingVaultForkTest is Test {
     }
 
     function _config(uint32 lockPeriod) internal pure returns (PonsStakingVault.Config memory) {
-        return PonsStakingVault.Config({lockPeriod: lockPeriod, minHarvestWei: 1, cooldown: 30 minutes});
+        return PonsStakingVault.Config({lockPeriod: lockPeriod, minHarvestWei: 1});
     }
 
     function _launch(uint32 lockPeriod) internal returns (address token, PonsStakingVault vault) {
@@ -125,6 +125,39 @@ contract PonsStakingVaultForkTest is Test {
         // still collectible once someone stakes.
         (uint256 idleWeth,) = vault.idleBalances();
         assertEq(idleWeth, 0, "failed run must not leave fees sitting in the vault");
+    }
+
+    /// @dev `PonsVaultLauncher.collect` is public, so fees can land here without {run} being the
+    ///      thing that fetched them. A distribution keyed on what the harvest returned would credit
+    ///      nothing in that case and strand the money: it is in the vault, but no staker has a claim
+    ///      on it and no later run reaches back for it.
+    function test_feesCollectedOutOfBandStillReachStakers() public {
+        (address token, PonsStakingVault vault) = _launch(0);
+
+        address alice = makeAddr("alice");
+        _buy(token, alice, 0.05 ether);
+        _stake(token, vault, alice, IERC20(token).balanceOf(alice));
+
+        _buy(token, makeAddr("trader1"), 0.05 ether);
+        _buy(token, makeAddr("trader2"), 0.05 ether);
+
+        // Anyone at all, for any reason. The locker pays the fee redirect, which is this vault.
+        vm.prank(makeAddr("bystander"));
+        launcher.collect(token);
+
+        (uint256 sittingHere,) = vault.idleBalances();
+        assertGt(sittingHere, 0, "precondition: fees arrived without run() fetching them");
+
+        vm.prank(makeAddr("randomKeeper"));
+        (uint256 wethDistributed,) = vault.run();
+
+        assertEq(wethDistributed, sittingHere, "everything unspoken-for must be distributed");
+
+        (uint256 pendingWeth,) = vault.pendingRewards(alice);
+        assertApproxEqAbs(pendingWeth, sittingHere, 1, "the sole staker should be owed all of it");
+
+        (uint256 stranded,) = vault.unencumberedBalances();
+        assertEq(stranded, 0, "nothing may be left that no staker can claim");
     }
 
     function test_stakerEarnsAndClaimsFees() public {
