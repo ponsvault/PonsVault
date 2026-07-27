@@ -488,9 +488,10 @@ vault `0x97BC2F82E978C373e9a3a25Cae751e7E9CfAbd15`. Launched via
 aggressive than the launch form's default of 0.025 ETH. That is why it behaved
 so eagerly; it is not representative.
 
-This stack predates the removal of `cooldown` from both `Config` structs, so its
-vaults are the old shape and the addresses above are stale. The whole set needs
-redeploying before launch.
+This stack is current in shape — `WebsiteLaunch.fork.t.sol` reads today's
+three-field buyback `Config` and two-field staking `Config` straight off vaults
+built by these factories. The reason it still has to be redeployed before launch is
+the exposed owner key, nothing about the code.
 
 ---
 
