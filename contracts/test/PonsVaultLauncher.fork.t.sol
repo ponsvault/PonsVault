@@ -128,6 +128,60 @@ contract PonsVaultLauncherForkTest is Test {
         assertEq(vault.totalTreasuryPaid(), 0, "burnBps 10000 leaves nothing for treasury");
     }
 
+    /// @dev pons credits a launch's initial buy to whoever called `launchToken`, which is the
+    ///      launcher — not the creator who paid for it. Every launch in this suite passes a dev buy,
+    ///      and none of them checked where it landed, so it sat in the launcher permanently: nothing
+    ///      else on that contract can move an ERC-20, and it is immutable by design.
+    function test_devBuyReachesTheCreator() public {
+        (address token,) = _launch(keccak256("pons-vault-salt-devbuy"));
+
+        assertGt(IERC20(token).balanceOf(creator), 0, "creator must receive the initial buy they paid for");
+        assertEq(IERC20(token).balanceOf(address(launcher)), 0, "launcher must not keep the initial buy");
+    }
+
+    /// @dev The forwarding must not invent a transfer when there was no initial buy.
+    function test_launchWithoutDevBuyMovesNothing() public {
+        uint256 fee = LAUNCHPAD.launchFee();
+        vm.prank(creator);
+        (address token,) = launcher.launchWithVault{value: fee}(
+            _metadata(), 0, 0, keccak256("pons-vault-salt-nodevbuy"), PonsTemplates.BUYBACK_BURN, abi.encode(_config())
+        );
+
+        assertEq(IERC20(token).balanceOf(creator), 0, "no buy means no tokens");
+        assertEq(IERC20(token).balanceOf(address(launcher)), 0, "and nothing held back");
+    }
+
+    /// @dev The deferred path, for when a token's post-launch caps block the immediate transfer.
+    ///      Anyone may trigger it; only the recorded creator can receive it.
+    function test_claimDevBuyPaysTheCreatorNotTheCaller() public {
+        (address token,) = _launch(keccak256("pons-vault-salt-claim"));
+
+        // Stand in for a launch whose immediate transfer was refused by the token.
+        deal(token, address(launcher), 1_000e18);
+        uint256 creatorBefore = IERC20(token).balanceOf(creator);
+
+        address opportunist = makeAddr("opportunist");
+        vm.prank(opportunist);
+        uint256 claimed = launcher.claimDevBuy(token);
+
+        assertEq(claimed, 1_000e18, "claim moves the whole held balance");
+        assertEq(IERC20(token).balanceOf(creator) - creatorBefore, 1_000e18, "creator receives it");
+        assertEq(IERC20(token).balanceOf(opportunist), 0, "the caller receives nothing");
+        assertEq(IERC20(token).balanceOf(address(launcher)), 0, "nothing left behind");
+    }
+
+    function test_claimDevBuyRejectsTokensThisLauncherDidNotLaunch() public {
+        vm.expectRevert(abi.encodeWithSelector(PonsVaultLauncher.NotLaunchedHere.selector, PonsAddresses.WETH));
+        launcher.claimDevBuy(PonsAddresses.WETH);
+    }
+
+    function test_claimDevBuyRevertsWhenNothingIsHeld() public {
+        (address token,) = _launch(keccak256("pons-vault-salt-empty-claim"));
+
+        vm.expectRevert(PonsVaultLauncher.NothingToClaim.selector);
+        launcher.claimDevBuy(token);
+    }
+
     function test_collectIsPermissionless() public {
         (address token,) = _launch(keccak256("pons-vault-salt-3"));
 
