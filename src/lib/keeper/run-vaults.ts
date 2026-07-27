@@ -4,6 +4,12 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { robinhoodChain } from '@/lib/pons/chain';
 import { robinhoodPublicClient } from '@/lib/pons/client';
 import { ROBINHOOD_RPC_URL } from '@/lib/pons/constants';
+import { PONS_TOKEN_ABI } from '@/lib/pons/token-state';
+import {
+  PONSVAULT_LAUNCHER_ABI,
+  isVaultLauncherDeployed,
+  vaultLauncherAddress,
+} from '@/lib/pons/vault';
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from '@/lib/pons/vault-state';
 import { listPonsVaultLaunches } from '@/lib/launch-registry/store';
 
@@ -43,12 +49,20 @@ const DEFAULT_DUST_WETH = '0.002';
 /**
  * Minimum seconds between keeper runs of the same vault.
  *
+ * A backstop, not the pacing control. The vaults have no cooldown — a run
+ * spends everything, so what really decides the cadence is how fast trading
+ * refills the vault past the creator's floor and {@link DEFAULT_MIN_WETH}.
+ * Keeping this at the cron interval means a busy token is served as soon as it
+ * qualifies, while a bug or a duplicated scheduler still cannot spend a vault
+ * on gas.
+ *
  * Derived from the vault's own `lastRunAt` rather than kept in memory, so it
  * survives restarts and holds across however many schedulers are pointed at
- * this endpoint. A creator's on-chain cooldown is honoured on top of this
- * whenever it is the stricter of the two.
+ * this endpoint. Note the gap that leaves: `lastRunAt` only moves once a run
+ * confirms, so two ticks overlapping in the same window both see the old value.
+ * Keep this at or above the cron interval for that reason.
  */
-const DEFAULT_MIN_INTERVAL_SECONDS = 3600;
+const DEFAULT_MIN_INTERVAL_SECONDS = 300;
 
 type VaultTemplate = 'buyback-burn' | 'staking';
 
@@ -97,25 +111,6 @@ function reasonOf(error: unknown): string {
   return (short ?? error.message).split('\n')[0].slice(0, 200);
 }
 
-/** The creator's own cooldown, which sits at a different index per template. */
-async function readCooldown(vault: Address, template: VaultTemplate): Promise<number> {
-  if (template === 'staking') {
-    const config = await robinhoodPublicClient.readContract({
-      address: vault,
-      abi: PONS_STAKING_VAULT_ABI,
-      functionName: 'config',
-    });
-    return Number(config[2]);
-  }
-
-  const config = await robinhoodPublicClient.readContract({
-    address: vault,
-    abi: PONS_VAULT_ABI,
-    functionName: 'config',
-  });
-  return Number(config[3]);
-}
-
 type Keeper = ReturnType<typeof keeperAccount>;
 type Wallet = ReturnType<typeof createWalletClient>;
 
@@ -146,6 +141,58 @@ function vaultRunner(vault: Address, template: VaultTemplate, account: Keeper, w
 }
 
 /**
+ * Every vault the launcher has created, read from its own `Launched` events.
+ *
+ * The database is the primary list because it is one query and already carries
+ * symbols. But a launch that succeeded on-chain and then failed to record — a
+ * closed tab, a Supabase blip — would be invisible to it: a working vault that
+ * no keeper ever touches, accruing fees with nothing to spend them. Reading the
+ * launcher's own log closes that gap.
+ *
+ * Scans from genesis, because this chain answers an address-and-topic filtered
+ * query over the full range in well under a second — a launcher emits one event
+ * per launch and nothing else. `PONSVAULT_LAUNCHER_START_BLOCK` narrows it to the
+ * launcher's deployment block if that ever stops being true.
+ */
+async function discoverVaultsOnChain(): Promise<VaultRef[]> {
+  if (!isVaultLauncherDeployed()) return [];
+
+  try {
+    const configured = (process.env.PONSVAULT_LAUNCHER_START_BLOCK ?? '').trim();
+
+    const logs = await robinhoodPublicClient.getContractEvents({
+      address: vaultLauncherAddress(),
+      abi: PONSVAULT_LAUNCHER_ABI,
+      eventName: 'Launched',
+      fromBlock: configured ? BigInt(configured) : 0n,
+      toBlock: 'latest',
+    });
+
+    return logs.flatMap((log) => {
+      const { token, vault } = log.args;
+      if (!token || !vault) return [];
+      return [{ token, vault, symbol: '' }];
+    });
+  } catch {
+    // A safety net must not become a new way for the whole tick to fail.
+    return [];
+  }
+}
+
+/** Ticker for a vault found on-chain, where no database row supplied one. */
+async function tokenSymbol(token: Address): Promise<string> {
+  try {
+    return await robinhoodPublicClient.readContract({
+      address: token,
+      abi: PONS_TOKEN_ABI,
+      functionName: 'symbol',
+    });
+  } catch {
+    return '???';
+  }
+}
+
+/**
  * Runs every vault that is currently worth running.
  *
  * Readiness is decided by simulating `run()` rather than by reading `canRun()`:
@@ -169,19 +216,32 @@ export async function runDueVaults(): Promise<KeeperTickResult> {
   const maxIdle = Number(process.env.KEEPER_MAX_IDLE_SECONDS ?? DEFAULT_MAX_IDLE_SECONDS);
   const now = Math.floor(Date.now() / 1000);
 
-  const launches = await listPonsVaultLaunches(200);
-  const vaults = launches.filter((launch) => !!launch.vault);
+  const byToken = new Map<string, VaultRef>();
+  for (const launch of await listPonsVaultLaunches(200)) {
+    if (!launch.vault) continue;
+    byToken.set(launch.token.toLowerCase(), {
+      token: launch.token as Address,
+      vault: launch.vault as Address,
+      symbol: launch.symbol,
+    });
+  }
+
+  // Anything the database missed. Recorded rows win, since they already know the
+  // ticker and cost nothing more to use.
+  for (const found of await discoverVaultsOnChain()) {
+    const key = found.token.toLowerCase();
+    if (byToken.has(key)) continue;
+    byToken.set(key, { ...found, symbol: await tokenSymbol(found.token) });
+  }
+
+  const vaults = [...byToken.values()];
 
   const outcomes: VaultRunOutcome[] = [];
   let ran = 0;
 
-  for (const launch of vaults) {
-    const token = launch.token as Address;
-    const vault = launch.vault as Address;
-    const symbol = launch.symbol;
-
-    // The templates differ in `run`'s signature and in where the cooldown sits
-    // in their config, so nothing below can be built until this is known.
+  for (const { token, vault, symbol } of vaults) {
+    // The templates differ in `run`'s signature, so nothing below can be built
+    // until this is known.
     let template: VaultTemplate;
     try {
       const reported = await robinhoodPublicClient.readContract({
@@ -201,13 +261,13 @@ export async function runDueVaults(): Promise<KeeperTickResult> {
     // Checked before simulating: a throttled vault should cost nothing to skip.
     let overdue: boolean;
     try {
-      const [lastRunAt, cooldown] = await Promise.all([
-        robinhoodPublicClient.readContract({ address: vault, abi: PONS_VAULT_ABI, functionName: 'lastRunAt' }),
-        readCooldown(vault, template),
-      ]);
+      const lastRunAt = await robinhoodPublicClient.readContract({
+        address: vault,
+        abi: PONS_VAULT_ABI,
+        functionName: 'lastRunAt',
+      });
 
-      const wait = Math.max(minInterval, cooldown);
-      const nextRunAt = Number(lastRunAt) + wait;
+      const nextRunAt = Number(lastRunAt) + minInterval;
       if (lastRunAt !== 0n && now < nextRunAt) {
         outcomes.push({ ...ref, status: 'throttled', nextRunIn: nextRunAt - now });
         continue;
