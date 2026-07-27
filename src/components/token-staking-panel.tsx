@@ -11,7 +11,6 @@ import { PONS_CHAIN_ID } from '@/lib/pons/constants';
 import { describeCadence, formatTokens, formatWeth, supplyPercent } from '@/lib/pons/vault-format';
 import {
   PONS_STAKING_VAULT_ABI,
-  cooldownRemaining,
   formatDuration,
   type StakingVaultState,
 } from '@/lib/pons/vault-state';
@@ -28,7 +27,43 @@ interface TokenStakingPanelProps {
   onChanged: () => void;
 }
 
-type StakeAction = 'stake' | 'unstake' | 'claim';
+type StakeAction = 'stake' | 'unstake' | 'claim' | 'run';
+
+/**
+ * What the payout button should do and say, given the vault's current state.
+ *
+ * Mirrors the buyback panel, including why `harvestable` is not `state.canRun`:
+ * on-chain that only sees what has already been swept out of the locker, so it
+ * reads "nothing to do" in exactly the normal case.
+ */
+function resolveRunAction(state: StakingVaultState, harvestable: bigint, isConnected: boolean) {
+  if (state.totalStaked === 0n) {
+    return {
+      label: 'Nobody staked',
+      disabled: true,
+      hint: 'Nobody is staked yet, so there is nobody to pay. The fees keep accruing and go to whoever stakes first.',
+    };
+  }
+  if (harvestable === 0n) {
+    return {
+      label: 'Nothing to pay out yet',
+      disabled: true,
+      hint: 'No fees have accrued since the last payout. The vault runs again once trading produces more.',
+    };
+  }
+  if (harvestable < state.minHarvestWei) {
+    return {
+      label: 'Below minimum',
+      disabled: true,
+      hint: `Fees are accruing, but this vault waits until ${formatWeth(state.minHarvestWei)} WETH so a payout is worth its gas.`,
+    };
+  }
+  return {
+    label: isConnected ? 'Run payout' : 'Connect to run',
+    disabled: false,
+    hint: 'The keeper will do this on its own shortly. You can go first if you like — the call has no owner, and you pay only the gas.',
+  };
+}
 
 /** A staker's own position, which only exists once a wallet is connected. */
 interface Position {
@@ -111,12 +146,14 @@ export function TokenStakingPanel({
 
       const base = { account: address, chain: robinhoodChain } as const;
 
-      if (action === 'claim') {
+      // Both take no arguments. `claim` pays the caller what they have already
+      // earned; `run` harvests and credits every staker and is open to anyone.
+      if (action === 'claim' || action === 'run') {
         const hash = await walletClient.writeContract({
           ...base,
           address: state.vault,
           abi: PONS_STAKING_VAULT_ABI,
-          functionName: 'claim',
+          functionName: action,
         });
         await publicClient!.waitForTransactionReceipt({ hash });
         return;
@@ -171,7 +208,6 @@ export function TokenStakingPanel({
   });
 
   const busy = mutation.isPending || isConnecting || isSwitching;
-  const waiting = nowSeconds === 0 ? 0 : cooldownRemaining(state, nowSeconds);
 
   const locked =
     !!position && position.unlockAt > 0n && nowSeconds > 0 && BigInt(nowSeconds) < position.unlockAt;
@@ -179,7 +215,8 @@ export function TokenStakingPanel({
   const hasRewards = !!position && (position.pendingWeth > 0n || position.pendingToken > 0n);
   const sharePercent = position ? Number(position.sharePpm) / 10_000 : 0;
 
-  const live = state.totalStaked > 0n && harvestable >= state.minHarvestWei && waiting === 0;
+  const runAction = resolveRunAction(state, harvestable, isConnected);
+  const live = !runAction.disabled;
 
   return (
     <section className="pv-panel token-vault">
@@ -382,16 +419,20 @@ export function TokenStakingPanel({
         <div className="token-vault-pending">
           <span className="token-vault-pending-label">Queued for the next payout</span>
           <span className="pv-mono token-vault-pending-value">{formatWeth(harvestable)} WETH</span>
-          <span className="token-vault-hint">
-            {state.totalStaked === 0n
-              ? 'Nobody is staked yet, so there is nobody to pay. The fees keep accruing and go to whoever stakes first.'
-              : waiting > 0
-                ? `Cooling down since the last payout — ready in ${formatDuration(waiting)}.`
-                : harvestable < state.minHarvestWei
-                  ? `Fees are accruing. This vault waits until ${formatWeth(state.minHarvestWei)} WETH so a payout is worth its gas.`
-                  : 'The keeper will trigger the payout shortly. Anyone can trigger it early — the call has no owner.'}
-          </span>
+          <span className="token-vault-hint">{runAction.hint}</span>
         </div>
+        <button
+          type="button"
+          className={cn(
+            'ui-btn ui-btn-primary token-vault-action',
+            runAction.disabled && 'is-blocked',
+          )}
+          disabled={busy || runAction.disabled}
+          onClick={() => mutation.mutate('run')}
+        >
+          {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+          <span className="ui-btn-label">{runAction.label}</span>
+        </button>
       </footer>
     </section>
   );
