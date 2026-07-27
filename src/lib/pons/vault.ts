@@ -11,6 +11,7 @@ import {
 } from 'viem';
 
 import { PONS_DEFAULT_CONFIG_ID, PONS_DEFAULT_DEX_ID } from './constants';
+import { PONSVAULT_DEPLOYMENT } from './deployments';
 import type { LaunchFormInput, PonsLaunchMetadata } from './types';
 
 // This module is imported by ./launch, so it must not import from it. Values
@@ -64,11 +65,12 @@ export const VAULT_TEMPLATES: VaultTemplate[] = [
  * Address of the deployed PonsVaultLauncher.
  *
  * The launcher must be the token's deployer for fees to be sweepable by anyone,
- * so attaching a vault is only possible through it. Until it is deployed and
- * this is set, the UI offers vault templates as unavailable rather than
- * building a transaction that would revert.
+ * so attaching a vault is only possible through it. Re-exported from
+ * {@link PONSVAULT_DEPLOYMENT} because most of the app wants only this one
+ * address; while it is blank the UI offers vault templates as unavailable rather
+ * than building a transaction that would revert.
  */
-export const PONSVAULT_LAUNCHER = (process.env.NEXT_PUBLIC_PONSVAULT_LAUNCHER ?? '').trim();
+export const PONSVAULT_LAUNCHER = PONSVAULT_DEPLOYMENT.launcher.trim();
 
 export function isVaultLauncherDeployed(): boolean {
   return isAddress(PONSVAULT_LAUNCHER, { strict: false });

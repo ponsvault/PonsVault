@@ -68,7 +68,7 @@ Open http://localhost:3000
 
 ### Environment
 
-See `.env.example`. `NEXT_PUBLIC_PONSVAULT_LAUNCHER` must point at the deployed launcher; until it is set, the launch form shows vault templates as unavailable and launches without one.
+See `.env.example`. The contract addresses are not environment variables — they live in `src/lib/pons/deployments.ts`, so a redeploy is one edit. While `launcher` there is blank, the launch form shows vault templates as unavailable and launches without one.
 
 ### Supabase
 
@@ -112,7 +112,17 @@ npm run keeper                       # one pass against KEEPER_URL
 ```
 
 On Vercel, `vercel.json` schedules `/api/keeper/tick` and `CRON_SECRET`
-authenticates it. Anywhere else, point cron at `npm run keeper`.
+authenticates it. Anywhere else, point cron at `npm run keeper`. Note that Vercel
+runs cron **only on production deployments** — nothing fires locally or on a
+preview.
+
+To check it is actually firing, `GET /api/keeper/status` returns the last tick and
+its age, and answers 503 once nothing has been recorded for 15 minutes. It needs
+the `keeper_ticks` table from `supabase/add-keeper-ticks.sql`.
+
+```bash
+curl -s https://your-deployment.example/api/keeper/status
+```
 
 The schedule only decides how often the keeper **looks**. How often it **acts**
 is set by the thresholds, and this matters more than it sounds: a run costs

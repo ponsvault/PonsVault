@@ -294,8 +294,28 @@ option short of leaving the pons rails.)
 
 - `src/lib/keeper/run-vaults.ts` — the logic
 - `GET /api/keeper/tick` — authenticated by `CRON_SECRET` or `KEEPER_SECRET`
+- `src/lib/keeper/status.ts` + `GET /api/keeper/status` — is it alive
 - `scripts/keeper-tick.mjs` (`npm run keeper`) — drives the route over HTTP
 - `vercel.json` — cron every 5 minutes
+
+### Knowing it still runs
+
+Every pass writes a row to `keeper_ticks` (`supabase/add-keeper-ticks.sql`),
+including the passes that decide to run nothing and the ones that fail. This is
+the whole point: a healthy keeper on a quiet day and a cron that stopped firing
+three days ago produce exactly the same on-chain evidence, which is none, and the
+difference only surfaces later as vaults that never burned. Recording the quiet
+passes is what makes silence measurable.
+
+`GET /api/keeper/status` reports the last tick, its age, and recent history, and
+answers **503 once nothing has been recorded for 15 minutes** — three cron
+intervals, so one missed tick from a deploy or a cold start does not cry wolf. The
+status code alone is enough for an uptime monitor. It is deliberately open, since
+it spends nothing and every figure in it is already public on-chain.
+
+Recording is best-effort and never raises: a tick that did its work but could not
+write its own history has still done the work, and failing the request over
+bookkeeping would turn a monitoring gap into an outage.
 
 Two audit scripts cover the seams the test suites structurally cannot see, since
 forge only ever speaks Solidity and the app only ever speaks TypeScript:
@@ -313,10 +333,10 @@ Vaults are found **two ways, merged by token**: the `ponsvault_launches` table,
 and the launcher's own `Launched` events. The table alone was a silent single
 point of failure — a launch that succeeded on-chain but failed to record left a
 working vault that no keeper would ever touch, accruing fees forever with nothing
-to spend them. The event scan runs from genesis in well under a second, since a
-launcher emits one event per launch; `PONSVAULT_LAUNCHER_START_BLOCK` narrows it
-if that changes. A failed scan returns empty rather than failing the tick, so the
-safety net cannot become a new dependency.
+to spend them. The scan runs from the launcher's deployment block, recorded beside
+its address in `src/lib/pons/deployments.ts`, and costs well under a second since a
+launcher emits one event per launch. A failed scan returns empty rather than
+failing the tick, so the safety net cannot become a new dependency.
 
 The keeper wallet holds **no authority**. It pays gas and nothing else. Losing
 the key costs its gas balance; switching it off strands nothing, because anyone

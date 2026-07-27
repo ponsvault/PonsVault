@@ -4,6 +4,7 @@ import { privateKeyToAccount } from 'viem/accounts';
 import { robinhoodChain } from '@/lib/pons/chain';
 import { robinhoodPublicClient } from '@/lib/pons/client';
 import { ROBINHOOD_RPC_URL } from '@/lib/pons/constants';
+import { PONSVAULT_DEPLOYMENT } from '@/lib/pons/deployments';
 import { PONS_TOKEN_ABI } from '@/lib/pons/token-state';
 import {
   PONSVAULT_LAUNCHER_ABI,
@@ -149,22 +150,19 @@ function vaultRunner(vault: Address, template: VaultTemplate, account: Keeper, w
  * no keeper ever touches, accruing fees with nothing to spend them. Reading the
  * launcher's own log closes that gap.
  *
- * Scans from genesis, because this chain answers an address-and-topic filtered
- * query over the full range in well under a second — a launcher emits one event
- * per launch and nothing else. `PONSVAULT_LAUNCHER_START_BLOCK` narrows it to the
- * launcher's deployment block if that ever stops being true.
+ * Scans from the launcher's own deployment block, since nothing it emitted can
+ * predate it. A launcher emits one event per launch and nothing else, so even a
+ * full scan stays cheap.
  */
 async function discoverVaultsOnChain(): Promise<VaultRef[]> {
   if (!isVaultLauncherDeployed()) return [];
 
   try {
-    const configured = (process.env.PONSVAULT_LAUNCHER_START_BLOCK ?? '').trim();
-
     const logs = await robinhoodPublicClient.getContractEvents({
       address: vaultLauncherAddress(),
       abi: PONSVAULT_LAUNCHER_ABI,
       eventName: 'Launched',
-      fromBlock: configured ? BigInt(configured) : 0n,
+      fromBlock: PONSVAULT_DEPLOYMENT.startBlock,
       toBlock: 'latest',
     });
 

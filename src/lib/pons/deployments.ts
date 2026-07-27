@@ -1,22 +1,30 @@
-import { PONSVAULT_LAUNCHER } from './vault';
-
 /**
- * The PonsVault contracts, as published on the docs page.
+ * The deployed PonsVault stack. One deploy, one edit, one diff.
  *
- * Addresses are filled in once, here, after the deploy script runs. Only the
- * launcher is read from the environment, because the app actually transacts
- * with it — the rest are published for verification rather than used at
- * runtime, so a constant is honest about what they are for.
+ * These are constants rather than environment variables on purpose. The launcher
+ * is the on-chain deployer of every token it creates, so it can never move
+ * without stranding them — an address that cannot change is described more
+ * honestly by code than by config. Keeping the other three alongside it means a
+ * redeploy cannot half-land, which is exactly what splitting them across a `.env`
+ * and a source file invited: publish this deploy's factories next to the last
+ * deploy's launcher, with nothing to catch it.
  *
- * An empty address renders as "publishing after deploy" rather than a broken
- * explorer link, which is what makes it safe to ship this page before the
- * stack is live.
+ * `startBlock` is where the launcher was deployed, which bounds the keeper's scan
+ * for vaults it has created.
+ *
+ * Leave an address empty and the docs page renders "publishing after deploy"
+ * instead of a broken explorer link, and the launch form offers vault templates
+ * as unavailable rather than building a transaction that would revert.
  */
-const ADDRESSES = {
+export const PONSVAULT_DEPLOYMENT = {
+  launcher: '0x815A82C9D1964D023a7e74b5BC20A5a1260F22aD',
   registry: '0x770c1AA562f7DfA60934959585DaECf2d9AD32be',
   buybackFactory: '0x3926af4490B4BA5Af78d785DD9Ba527B383C1B1e',
   stakingFactory: '0x1d8B2395E7e5D059544c29f3ee9100fcab0FbbcC',
+  startBlock: 20_939_739n,
 } as const;
+
+const ADDRESSES = PONSVAULT_DEPLOYMENT;
 
 export interface PonsVaultContract {
   name: string;
@@ -28,7 +36,7 @@ export const PONSVAULT_CONTRACTS: PonsVaultContract[] = [
   {
     name: 'PonsVaultLauncher',
     role: 'Performs the launch, so it becomes the token\u2019s on-chain deployer. Wires fees to the vault and exposes the open sweep that lets anyone trigger a run.',
-    address: PONSVAULT_LAUNCHER,
+    address: ADDRESSES.launcher,
   },
   {
     name: 'PonsVaultRegistry',
