@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils';
 
 export const PONSVAULT_X_URL = 'https://x.com/ponsvault';
 export const PONSVAULT_X_HANDLE = '@ponsvault';
+export const PONSVAULT_GITHUB_URL = 'https://github.com/ponsvault/PonsVault';
 
 export function XLogo({ className }: { className?: string }) {
   return (

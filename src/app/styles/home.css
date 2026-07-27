@@ -491,8 +491,8 @@
 
 .pv-footer-cols {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, auto));
-  gap: 56px;
+  grid-template-columns: repeat(4, minmax(110px, auto));
+  gap: 48px;
 }
 
 .pv-footer-heading {
@@ -518,6 +518,13 @@
 
 .pv-footer-bottom .pv-body-sm {
   color: var(--text-subtle);
+}
+
+@media (max-width: 860px) {
+  .pv-footer-cols {
+    grid-template-columns: repeat(2, minmax(110px, auto));
+    gap: 40px 48px;
+  }
 }
 
 @media (max-width: 560px) {

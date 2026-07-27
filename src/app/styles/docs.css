@@ -276,6 +276,45 @@
   white-space: nowrap;
 }
 
+/* --- contract tables ------------------------------------------------------ */
+
+/* Contract names are long enough to blow past the 180px first column, so this
+   variant lets them wrap and reserves a fixed lane for the address instead. */
+.pv-table-scroll {
+  overflow-x: auto;
+}
+
+.pv-contract-table {
+  min-width: 560px;
+}
+
+.pv-contract-table td:first-child {
+  width: 240px;
+  white-space: normal;
+  color: var(--text-primary);
+}
+
+.pv-contract-table td:first-child code {
+  overflow-wrap: anywhere;
+}
+
+.pv-contract-table td:last-child {
+  width: 130px;
+  white-space: nowrap;
+}
+
+.pv-contract-table td:last-child a {
+  color: var(--text-primary);
+  font-size: 13px;
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline-strong, var(--hairline));
+  transition: opacity var(--dur) var(--ease);
+}
+
+.pv-contract-table td:last-child a:hover {
+  opacity: 0.65;
+}
+
 /* --- next steps ---------------------------------------------------------- */
 
 .pv-docs-links {

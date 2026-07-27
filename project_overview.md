@@ -69,7 +69,7 @@ Three consequences follow, and most of the design is downstream of them:
 | `interfaces/IPonsVaultFactory.sol` | The shape every template's factory must have |
 | `factories/PonsBuybackBurnVaultFactory.sol` | Beacon proxy factory, `vaultOf(token)` index |
 | `factories/PonsStakingVaultFactory.sol` | Same, for staking vaults |
-| `vaults/PonsVaultBase.sol` | Shared: harvest, TWAP guard, burn, oracle priming |
+| `vaults/PonsVaultBase.sol` | Shared: harvest, buyback, burn |
 | `vaults/PonsBuybackBurnVault.sol` | Template 1: config, `run(minOut)`, `canRun()` |
 | `vaults/PonsStakingVault.sol` | Template 2: stake/unstake/claim, `run()` |
 | `PonsAddresses.sol` | Chain constants |
@@ -119,40 +119,71 @@ What it costs:
 
 ### What `run()` does — Buyback & Burn
 
-Permissionless, and the whole template in seven steps:
+Permissionless, and the whole template in five steps:
 
-1. Revert if the creator's `cooldown` has not elapsed.
-2. `_harvest()` — call `collector.collect(token)`, sweeping the locker into the
+1. `_harvest()` — call `collector.collect(token)`, sweeping the locker into the
    vault. Arrives as WETH **and** the token itself, since a V3 position accrues
    fees on both sides.
-3. Revert if the swept WETH is under `minHarvestWei`.
-4. `wethSpent = balance × burnBps / 10000`.
-5. `_requireFairPrice()` — reject if spot deviates from the TWAP by more than
-   `maxTickDeviation`. This is the sandwich guard, and it is load-bearing
-   precisely *because* the call is permissionless: without it, an attacker could
-   move the pool, trigger the buyback into the skewed price, and unwind.
-6. `_buyback()` then `_burnAllTokens()` — swap WETH→token, then send the vault's
+2. Revert if the swept WETH is under `minHarvestWei`, or is zero.
+3. `wethSpent = balance × burnBps / 10000`.
+4. `_buyback()` then `_burnAllTokens()` — swap WETH→token, then send the vault's
    **entire** token balance to `0x…dEaD`. "Entire" matters: it burns the bought
    tokens and the harvested token-side fees together, and the latter never
    needed a swap.
-7. Any remainder goes to the treasury, only when `burnBps < 100%`.
+5. Any remainder goes to the treasury, only when `burnBps < 100%`.
 
 The vault ends every run holding zero WETH and zero tokens. That is what makes
 "nothing to withdraw" a fact about the code rather than a promise.
 
+### There is no price guard, and that is a choice
+
+The swap runs at whatever the pool quotes in that block. `run()`'s
+`amountOutMinimum` is passed straight to the router and is the only protection
+available; the site and the keeper both send `0`.
+
+Because `run()` is open to anyone, this is directly exploitable: move the pool
+up, call `run(0)` in the same transaction, and unwind. The vault spends its full
+balance and receives very little, and the burn is dust. The loss per attempt is
+bounded by one batch of accrued fees, so `minHarvestWei` sets the size of the
+target as well as the pacing.
+
+This was removed deliberately, in favour of buying the moment the threshold is
+hit with no warm-up period and nothing for the creator to configure. The
+previous design compared spot against a TWAP over a configurable window, which
+required `primeOracle()` to grow the pool's observation buffer and then enough
+trading history to fill it — a first-run delay and a manual step that could
+strand a vault indefinitely if nobody pressed the button.
+`test_callerSuppliedFloorStillApplies` pins down that the opt-in floor still
+works for a caller who wants it.
+
+### Why there is no cooldown
+
+Step 5 spends the entire balance, which makes step 2 a complete pacing control
+on its own: a run cannot repeat until trading has refilled the vault past the
+floor. A timer would only duplicate that, and worse — it paces by the clock
+rather than by volume, so a busy token waits for no reason and a quiet one still
+burns dust the moment its timer expires.
+
+One consequence is worth knowing: a buyback's own swap pays pool fees, which
+accrue straight back to the position. A vault with a negligible floor really can
+run back to back off its own exhaust. The floor is what makes the pacing mean
+something, which is why the form defaults it rather than leaving it at zero.
+`test_balanceBelowFloorCannotRun` and `test_runSpendsEverythingItHolds` pin both
+halves of this down.
+
 ### Config, fixed forever at launch
 
-`burnBps`, `treasury`, `minHarvestWei`, `cooldown`, `twapWindow`,
-`maxTickDeviation`. Written in `initialize()` and never assignable again.
+`burnBps`, `treasury`, `minHarvestWei`. Written in `initialize()` and never
+assignable again.
 
 ### What `run()` does — Staking
 
 Holders deposit the token into the vault; fees are paid out to them pro rata as
 WETH. `run()` harvests exactly as above, then credits every staker via the
-standard `accRewardPerShare` accumulator. No swap, so no oracle and no TWAP
-guard — there is nothing here to sandwich.
+standard `accRewardPerShare` accumulator. No swap, so no price exposure at all —
+there is nothing here to bait.
 
-Config is `lockPeriod`, `minHarvestWei`, `cooldown`. Rewards accrue in **two**
+Config is `lockPeriod` and `minHarvestWei`. Rewards accrue in **two**
 currencies, because that is how the fees arrive: WETH plus whatever the pool
 earned on the token side.
 
@@ -264,11 +295,28 @@ option short of leaving the pons rails.)
 - `src/lib/keeper/run-vaults.ts` — the logic
 - `GET /api/keeper/tick` — authenticated by `CRON_SECRET` or `KEEPER_SECRET`
 - `scripts/keeper-tick.mjs` (`npm run keeper`) — drives the route over HTTP
-- `vercel.json` — cron every 15 minutes
+- `vercel.json` — cron every 5 minutes
+
+Two audit scripts cover the seams the test suites structurally cannot see, since
+forge only ever speaks Solidity and the app only ever speaks TypeScript:
+`scripts/audit-abi-seam.mjs` diffs every hand-written TS ABI against the compiled
+contracts, and `scripts/audit-config-bytes.ts` prints the real calldata the launch
+form produces, which `test/VaultConfigDecoding.t.sol` then decodes with the
+factories' own types. Regenerate the literals in that test whenever a Config
+changes.
 
 Readiness is decided by **simulating `run()`**, never by `canRun()` (§4). A
 simulation answers the only question that matters: would this succeed, and what
 would it do.
+
+Vaults are found **two ways, merged by token**: the `ponsvault_launches` table,
+and the launcher's own `Launched` events. The table alone was a silent single
+point of failure — a launch that succeeded on-chain but failed to record left a
+working vault that no keeper would ever touch, accruing fees forever with nothing
+to spend them. The event scan runs from genesis in well under a second, since a
+launcher emits one event per launch; `PONSVAULT_LAUNCHER_START_BLOCK` narrows it
+if that changes. A failed scan returns empty rather than failing the tick, so the
+safety net cannot become a new dependency.
 
 The keeper wallet holds **no authority**. It pays gas and nothing else. Losing
 the key costs its gas balance; switching it off strands nothing, because anyone
@@ -285,8 +333,8 @@ them burning $1.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `KEEPER_MIN_INTERVAL_SECONDS` | 3600 | binds on busy tokens — sets the cadence |
-| `KEEPER_MIN_WETH` | 0.025 (~$47) | binds on quiet tokens — sets the size |
+| `KEEPER_MIN_INTERVAL_SECONDS` | 300 | per-vault backstop; matches the cron interval |
+| `KEEPER_MIN_WETH` | 0.025 (~$47) | the real control — matches the form's default |
 | `KEEPER_MAX_IDLE_SECONDS` | 86400 | how long a vault may sit under the floor |
 | `KEEPER_DUST_WETH` | 0.002 (~$4) | the floor once overdue |
 | `KEEPER_MIN_VALUE_RATIO` | 3 | never spend more on gas than it is worth |
@@ -297,7 +345,14 @@ where someone is deciding whether the vault does anything. A vault that has neve
 run counts as overdue immediately.
 
 The interval is measured from the vault's on-chain `lastRunAt`, so it is
-stateless — restarts and multiple schedulers cannot double-fire.
+stateless — restarts and multiple schedulers cannot double-fire. It is kept at the
+cron interval for that reason: `lastRunAt` only moves once a run confirms, so two
+ticks overlapping inside one window would both read the old value.
+
+`KEEPER_MIN_WETH` and the launch form's `minHarvestEth` default are deliberately
+the same number. Both floors apply and the higher one decides, so a lower form
+default would show creators a threshold that does not actually pace their vault.
+Change one and change the other.
 
 None of this constrains the **manual** button, deliberately. Gating that would
 mean someone controls when fees get burned, which is the guarantee the design
@@ -347,9 +402,13 @@ alternative is carrying legacy plumbing permanently for one row.
 
 Test token **SBX (Sandbox)** — `0xa84b9f3b386a4875e524a0c35a4569ce85a1d083`,
 vault `0x97BC2F82E978C373e9a3a25Cae751e7E9CfAbd15`. Launched via
-`contracts/script/TestLaunch.s.sol`, which hardcodes `cooldown = 0` and
-`minHarvest = 0` — far more aggressive than the launch form's defaults (1h,
-0.005 ETH). That is why it behaved so eagerly; it is not representative.
+`contracts/script/TestLaunch.s.sol`, which hardcodes `minHarvest = 0` — far more
+aggressive than the launch form's default of 0.025 ETH. That is why it behaved
+so eagerly; it is not representative.
+
+This stack predates the removal of `cooldown` from both `Config` structs, so its
+vaults are the old shape and the addresses above are stale. The whole set needs
+redeploying before launch.
 
 ---
 
@@ -361,9 +420,20 @@ vault `0x97BC2F82E978C373e9a3a25Cae751e7E9CfAbd15`. Launched via
 | Staking | built and tested, not yet deployed |
 | Lottery | not started — see below |
 
-**Staking** is written, covered by ten fork tests, and wired end to end through
+**Staking** is written, covered by eleven fork tests, and wired end to end through
 the launch form, token page, keeper and explore cards. It has never been
 deployed or launched against; it goes live with the registry redeploy.
+
+One bug worth remembering, found by auditing it against the buyback rather than
+by any test. `run()` used to distribute what its own harvest returned. But
+`PonsVaultLauncher.collect` is public, so anyone can make the locker pay a vault
+without going through `run()` — after which the harvest returns nothing, `run()`
+reverts with `NothingToHarvest`, and the money sits in the vault owed to nobody,
+unreachable by any later run. Free to trigger, repeatable, and permanent. It now
+distributes {unencumberedBalances} instead, which is what the buyback always did
+with `idleBalances()`. `test_feesCollectedOutOfBandStillReachStakers` guards it.
+The fix also aligned the contract with the UI, which was already reading
+`unencumberedBalances` as "queued for the next payout".
 
 Everything after Staking is a factory deployment plus one `register()` call —
 `script/RegisterVaultTemplate.s.sol` does both halves of the second step.

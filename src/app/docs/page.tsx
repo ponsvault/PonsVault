@@ -3,15 +3,23 @@ import Link from 'next/link';
 import { AlertTriangle, ArrowRight, Info, Lightbulb } from 'lucide-react';
 
 import { Reveal } from '@/components/ui/reveal';
+import { PONSVAULT_GITHUB_URL } from '@/components/x-social-link';
+import {
+  PONSVAULT_CONTRACTS,
+  UPSTREAM_CONTRACTS,
+  type PonsVaultContract,
+} from '@/lib/pons/deployments';
+import { explorerAddressUrl, shortAddress } from '@/lib/utils';
 
 export const metadata: Metadata = {
   title: 'Docs · PonsVault',
   description:
-    'How PonsVault turns pons creator fees into an on-chain rule — the vault mechanic, the templates, the parameters, and the security model.',
+    'How PonsVault turns pons creator fees into an on-chain rule — the vault mechanic, the templates, the parameters, the contracts, and the security model.',
 };
 
 const TOC = [
   { href: '#overview', label: 'Overview' },
+  { href: '#contracts', label: 'Contracts' },
   { href: '#vaults', label: 'How a vault earns' },
   { href: '#authority', label: 'Who can trigger it' },
   { href: '#templates', label: 'Templates' },
@@ -19,6 +27,46 @@ const TOC = [
   { href: '#security', label: 'Security model' },
   { href: '#limits', label: 'Limits & caveats' },
 ];
+
+function ContractTable({ contracts }: { contracts: PonsVaultContract[] }) {
+  return (
+    <div className="pv-table-scroll">
+      <table className="pv-spec-table pv-contract-table">
+        <thead>
+          <tr>
+            <th>Contract</th>
+            <th>What it does</th>
+            <th>Address</th>
+          </tr>
+        </thead>
+        <tbody>
+          {contracts.map((contract) => (
+            <tr key={contract.name}>
+              <td>
+                <code>{contract.name}</code>
+              </td>
+              <td>{contract.role}</td>
+              <td>
+                {contract.address ? (
+                  <a
+                    className="pv-mono"
+                    href={explorerAddressUrl(contract.address)}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {shortAddress(contract.address)}
+                  </a>
+                ) : (
+                  <span className="pv-body-sm">Published after deploy</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 export default function DocsPage() {
   return (
@@ -85,6 +133,33 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
+            <div id="contracts" />
+            <h2>Contracts</h2>
+            <p>
+              Everything PonsVault does happens in these contracts, on Robinhood Chain (4663). They
+              are deployed once and reused by every launch — the only thing created per token is a
+              small vault of your chosen template. The rest of this page explains what they do and
+              why.
+            </p>
+            <ContractTable contracts={PONSVAULT_CONTRACTS} />
+            <p>
+              Your own vault&apos;s address is shown on your token&apos;s page, and is also readable
+              from the launcher by calling <code>vaultOf</code> with your token address. The source
+              for all of them is on{' '}
+              <a href={PONSVAULT_GITHUB_URL} target="_blank" rel="noreferrer">
+                GitHub
+              </a>
+              .
+            </p>
+
+            <h3>What we build on</h3>
+            <p>
+              These belong to pons and the chain. PonsVault calls them and cannot change them.
+            </p>
+            <ContractTable contracts={UPSTREAM_CONTRACTS} />
+          </Reveal>
+
+          <Reveal as="section" className="pv-docs-section">
             <div id="vaults" />
             <h2>How a vault earns</h2>
             <p>
@@ -100,7 +175,7 @@ export default function DocsPage() {
             </p>
             <p>
               That much is the same for every template. What happens next is the part you choose.
-              Buyback &amp; Burn, the template available today, runs this cycle:
+              Buyback &amp; Burn, one of the two templates available today, runs this cycle:
             </p>
             <pre className="pv-docs-pre">
               <code>
@@ -139,6 +214,13 @@ export default function DocsPage() {
               gap by launching the token through its own launcher contract, which therefore becomes
               the deployer. The launcher exposes an open sweep function, and that is what lets the
               whole cycle run without any privileged operator.
+            </p>
+            <p>
+              In practice you should not have to press anything. PonsVault runs a bot that checks
+              every live vault every few minutes and triggers a run once the accrued fees clear your
+              minimum and are worth more than the gas. It is a convenience, not a dependency:
+              it has no special permission, and if it stopped tomorrow any holder could keep the
+              vault running from the button on your token&apos;s page.
             </p>
             <div className="pv-callout">
               <Info className="pv-callout-icon h-5 w-5" strokeWidth={1.75} />
@@ -198,69 +280,76 @@ export default function DocsPage() {
 
           <Reveal as="section" className="pv-docs-section">
             <div id="parameters" />
-            <h2>Parameters: Buyback &amp; Burn</h2>
+            <h2>Parameters</h2>
             <p>
-              Every template exposes its own parameters — a lottery is configured by round length and
-              prize share, not by a burn share. The table below covers Buyback &amp; Burn, since that
-              is the template you can launch today.
+              Every template exposes its own settings, named here as they appear in the launch form.
+              They are written once, when the vault is created. None of them has a setter, so none
+              of them can be changed later — not by you, and not by us.
             </p>
-            <p>
-              These are set once, when the vault is created. None of them has a setter, so none of
-              them can be changed later — not by you, and not by us.
-            </p>
+            <div className="pv-callout">
+              <Info className="pv-callout-icon h-5 w-5" strokeWidth={1.75} />
+              <div>
+                <p className="pv-callout-title">There is no schedule to set</p>
+                <p>
+                  A vault has no timer. A run spends everything it is holding, so the next one
+                  cannot happen until trading has refilled it past your minimum. That single number
+                  is what sets the pace — busy tokens act often, quiet ones rarely, and neither
+                  needs a clock.
+                </p>
+              </div>
+            </div>
+
+            <h3>Buyback &amp; Burn</h3>
             <table className="pv-spec-table">
               <thead>
                 <tr>
-                  <th>Parameter</th>
+                  <th>Setting</th>
                   <th>What it controls</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
+                  <td>Burn share</td>
                   <td>
-                    <code>burnBps</code>
-                  </td>
-                  <td>
-                    Share of harvested WETH spent on the buyback, in basis points. 10000 means
-                    everything is burned and nothing goes to a treasury.
+                    How much of each batch of fees is spent buying and burning. At 100% there is no
+                    treasury at all.
                   </td>
                 </tr>
                 <tr>
+                  <td>Treasury</td>
+                  <td>Where anything not burned is sent. Required unless the burn share is 100%.</td>
+                </tr>
+                <tr>
+                  <td>Minimum fees before a run</td>
                   <td>
-                    <code>treasury</code>
+                    How much has to build up before a buyback can happen. The only thing pacing the
+                    vault: set it higher and it buys less often, in bigger amounts.
                   </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Staking</h3>
+            <table className="pv-spec-table">
+              <thead>
+                <tr>
+                  <th>Setting</th>
+                  <th>What it controls</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Lock period</td>
                   <td>
-                    Where the remainder is sent. Required unless the burn share is 100%.
+                    How long a stake is held, counted from each staker&apos;s most recent deposit.
+                    Zero means people can withdraw whenever they want. Rewards are never locked.
                   </td>
                 </tr>
                 <tr>
+                  <td>Minimum fees before a payout</td>
                   <td>
-                    <code>cooldown</code>
-                  </td>
-                  <td>
-                    Minimum seconds between runs, so the vault batches fees instead of burning dust
-                    and wasting gas.
-                  </td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>minHarvestWei</code>
-                  </td>
-                  <td>Minimum accrued WETH before a run is allowed to proceed.</td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>twapWindow</code>
-                  </td>
-                  <td>Length of the time-weighted average price window used as a fairness check.</td>
-                </tr>
-                <tr>
-                  <td>
-                    <code>maxTickDeviation</code>
-                  </td>
-                  <td>
-                    How far the pool&apos;s spot price may sit from that average before the vault
-                    refuses to trade.
+                    How much has to build up before stakers are paid. Set it higher and payouts come
+                    less often, in bigger amounts.
                   </td>
                 </tr>
               </tbody>
@@ -273,26 +362,32 @@ export default function DocsPage() {
             <p>
               Making the trigger public is what makes a vault credible, and it is also what makes it
               attackable. Any template that trades on demand is an invitation to move the pool first
-              and sell into it. Using Buyback &amp; Burn as the worked example, three things address
-              that.
+              and sell into it. Using Buyback &amp; Burn as the worked example, here is exactly where
+              that leaves you.
             </p>
             <ul className="pv-docs-list">
               <li>
-                <strong>A price sanity check.</strong> Before swapping, the vault reads the pool&apos;s
-                time-weighted average price and compares it to the current spot price. If they
-                diverge beyond your configured tolerance, the run reverts.
+                <strong>The buyback has no price check.</strong> It buys at whatever the pool quotes
+                in that block, with no average to compare against and no floor of its own. A buyback
+                that lands alongside a large trade — including one placed deliberately to bait it —
+                will buy at that price.
               </li>
               <li>
-                <strong>A caller-supplied floor.</strong> Whoever triggers the run can pass their own
-                minimum output. When the pool&apos;s oracle has no usable history yet, supplying that
-                floor becomes mandatory rather than optional.
+                <strong>A caller-supplied floor, if you want one.</strong> Whoever triggers the run
+                may pass a minimum number of tokens the swap must return, which aborts the whole run
+                instead of accepting a bad fill. This site and our bot pass none.
               </li>
               <li>
-                <strong>A bounded prize.</strong> A run can only ever spend fees that have actually
-                accrued, so the most an attacker can contest is one batch of fees — not the treasury,
-                and never the liquidity.
+                <strong>A bounded loss.</strong> A run can only ever spend fees that have actually
+                accrued, so the most at stake in any single run is one batch of fees — never the
+                treasury, and never the liquidity.
               </li>
             </ul>
+            <p>
+              Your harvest minimum is therefore doing double duty: it sets how much of a target each
+              run represents. A larger minimum means fewer, larger buybacks, and a larger prize for
+              anyone willing to try for it.
+            </p>
             <p>
               Beyond the swap itself, the vault never takes custody of anything it can misdirect. It
               holds no launch funds, cannot touch the liquidity position, and has no function that
@@ -317,10 +412,10 @@ export default function DocsPage() {
             </p>
             <ul className="pv-docs-list">
               <li>
-                <strong>The oracle needs warming up.</strong> New pons pools start with room for a
-                single price observation, which is not enough for a time-weighted average. Until the
-                pool has accumulated history, whoever triggers a run has to supply their own minimum
-                output. Priming the pool is a public, one-off call.
+                <strong>A buyback moves the price it buys at.</strong> On a thin pool, spending a
+                batch of fees in one swap pushes the price up as it fills, so the tokens burned are
+                worth less than the WETH spent. Larger, less frequent runs feel efficient but suffer
+                this more, not less.
               </li>
               <li>
                 <strong>Burning is a two-step move.</strong> In Buyback &amp; Burn, pons tokens reject

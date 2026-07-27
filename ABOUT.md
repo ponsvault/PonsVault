@@ -57,7 +57,7 @@ Launched tokens trade in the same WETH pools as any other pons launch. Graduatio
 
 ### The vault panel
 
-On a token with a vault, the token page shows the immutable configuration, lifetime totals (harvested, burned, paid out), fees currently idle in the vault, and a **Run** button that anyone can press when the vault is ready. If the pool's price oracle has never been primed, it offers that first, since the price guard cannot work without oracle history.
+On a token with a vault, the token page shows the immutable configuration, lifetime totals (harvested, burned, paid out), fees currently idle in the vault, and a **Run** button that anyone can press once enough fees have accrued.
 
 ---
 
@@ -72,9 +72,9 @@ So a vault launch goes through `PonsVaultLauncher`, which deploys the token and 
 ## Security model
 
 - **Immutable parameters** — no setters, so a vault cannot be retuned after people have bought in
-- **TWAP price guard** — templates that trade price against a time-weighted average and revert outside configured bounds, rather than being sandwiched
-- **Cooldown and minimum harvest** — a vault cannot be spammed into wasting its own fees on gas
-- **Public triggers** — `run()` and `primeOracle()` take no privileged caller
+- **Minimum harvest** — a run spends the whole balance, so it cannot repeat until trading refills the vault past the creator's floor. That, not a timer, is what stops a vault being spammed into wasting its fees on gas
+- **Public triggers** — `run()` takes no privileged caller
+- **No price guard on the buyback** — the swap takes whatever the pool quotes, so a run that lands beside a large trade buys at that price. `run()`'s `amountOutMinimum` is the only protection available and the app passes zero. What a single run can lose is capped at one batch of accrued fees
 
 ---
 

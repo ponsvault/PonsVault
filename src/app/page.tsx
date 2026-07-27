@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 import { Reveal } from '@/components/ui/reveal';
+import { PONSVAULT_GITHUB_URL, PONSVAULT_X_URL } from '@/components/x-social-link';
 import { VaultPanel } from '@/components/vault-panel';
 import { VaultFlow } from '@/components/vault-flow';
 
@@ -131,13 +132,13 @@ const TEMPLATES = [
     name: 'Buyback & Burn',
     status: 'live' as const,
     body: 'Fees buy your token off the open market and send it to the burn address. Supply falls with volume.',
-    params: ['Burn share', 'Treasury split', 'Wait between runs', 'Price check'],
+    params: ['Burn share', 'Treasury split', 'Fees before a buy'],
   },
   {
     name: 'Staking',
     status: 'live' as const,
     body: 'Holders stake your token and earn the fees in WETH, split by share of the pool. Real yield, and supply locked up while it earns.',
-    params: ['Lock period', 'Minimum payout', 'Wait between payouts'],
+    params: ['Lock period', 'Fees before a payout'],
   },
   {
     name: 'Lottery',
@@ -204,7 +205,7 @@ const STEPS = [
   },
   {
     title: 'Choose your vault',
-    body: 'Pick a template and set its parameters — shares, destinations, cooldown, price bounds. They are written once.',
+    body: 'Pick a template and set it up — shares, destinations, how much has to build up before it acts, how much price movement it tolerates. Written once, then fixed.',
   },
   {
     title: 'Launch through pons',
@@ -248,24 +249,24 @@ const GUARANTEES = [
     body: 'Running a vault is open to every address, so it cannot be quietly switched off or timed to benefit an insider.',
   },
   {
-    title: 'Immutable parameters',
-    body: 'Shares, destinations and cooldown are written at creation. There is no setter to change them afterwards.',
+    title: 'Settings are permanent',
+    body: 'Shares, destinations and thresholds are written when the vault is created. Nothing can change them afterwards — not the creator, not us.',
   },
   {
     title: 'Fees never touch a wallet',
     body: 'Collected fees move from the pons locker into the vault. No intermediary address can intercept them.',
   },
   {
-    title: 'Buys skip manipulated prices',
-    body: 'If someone pushes the price right before a buyback, the vault waits rather than overpaying.',
+    title: 'One vault per token',
+    body: 'Each launch gets its own contract holding only that token\u2019s fees. Nothing is pooled, so one token\u2019s activity cannot touch another\u2019s.',
   },
   {
     title: 'Outcomes are verifiable',
     body: 'Burns, prizes and splits are ordinary transfers. Whatever your template does, anyone can audit it from chain data alone.',
   },
   {
-    title: 'No keeper subscription',
-    body: 'There is no off-chain service to pay for or trust. The contract is the entire dependency.',
+    title: 'Runs without you',
+    body: 'Our bot triggers each vault once the fees are worth the gas. It has no special permission — if it stopped, any holder could run it instead.',
   },
 ];
 
@@ -333,7 +334,15 @@ const FOOTER_LINKS: { heading: string; links: { label: string; href: string; ext
     links: [
       { label: 'How vaults work', href: '/docs#vaults' },
       { label: 'Parameters', href: '/docs#parameters' },
+      { label: 'Contracts', href: '/docs#contracts' },
       { label: 'Security model', href: '/docs#security' },
+    ],
+  },
+  {
+    heading: 'PonsVault',
+    links: [
+      { label: 'X', href: PONSVAULT_X_URL, external: true },
+      { label: 'GitHub', href: PONSVAULT_GITHUB_URL, external: true },
     ],
   },
   {

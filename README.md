@@ -120,19 +120,18 @@ about six cents of gas, so a guard that only compares value against gas holds
 nothing back. Without a floor the keeper burns each trickle of fees the moment
 it lands, and the burn history becomes dust instead of legible events.
 
-Which threshold binds depends on the token. On a busy one the **interval**
-does — it always has fees, so the clock sets the cadence. On a quiet one the
-**floor** does, since its interval elapsed long ago. A flat floor would punish
-exactly the tokens that can least afford it, leaving a slow launch showing
-"nothing burned yet" for a week, so the floor drops to `KEEPER_DUST_WETH` once
-a vault has gone `KEEPER_MAX_IDLE_SECONDS` without running.
+The **floor** is what usually binds, because the vaults have no timer of their
+own: a run spends everything it holds, so the cadence is however fast trading
+refills it past the creator's minimum. A flat floor would punish exactly the
+tokens that can least afford it, leaving a slow launch showing "nothing burned
+yet" for a week, so it drops to `KEEPER_DUST_WETH` once a vault has gone
+`KEEPER_MAX_IDLE_SECONDS` without running.
 
-The interval is measured from the vault's own on-chain `lastRunAt`, so it
-survives restarts and holds even with several schedulers pointed at the same
-deployment.
-
-A creator's own `cooldown` is honoured on top, whenever it is the stricter of
-the two.
+`KEEPER_MIN_INTERVAL_SECONDS` is a backstop rather than a schedule — it matches
+the cron interval, so a qualifying vault is served on the next tick while a bug
+or a duplicated scheduler still cannot spend a vault on gas. It is measured from
+the vault's own on-chain `lastRunAt`, so it survives restarts and holds even
+with several schedulers pointed at the same deployment.
 
 ## Costs
 
