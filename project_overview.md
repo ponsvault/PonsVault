@@ -379,26 +379,35 @@ stored.
 
 ## 8. Deployed (TEST ONLY)
 
-Chain 4663. **The factory owner is a private key that has been publicly exposed.
-This stack must be redeployed before any real use.**
+Chain 4663, registry stack, deployed at block **20939739**. **The owner is a
+private key that has been publicly exposed, so this stack can never hold real
+value** — anyone who has seen that key can upgrade the beacons and drain every
+vault created under it. It exists to test the full flow end to end.
 
-These addresses predate the registry, so they are already stale: the launcher
-below still has the old two-factory constructor. The redeploy that introduces
-`PonsVaultRegistry` should be the last one the launcher ever needs — after it,
-templates are registered rather than compiled in. SBX loses its vault panel at
-that point, since a fresh launcher has no record of it and the old buyback
-factory is not registered in the new registry. It is a throwaway test token; the
-alternative is carrying legacy plumbing permanently for one row.
+The owner is at least a different address from the keeper this time, which is the
+shape the real deploy should keep: the keeper lives on a server and must be
+powerless, the owner can drain everything and should be offline.
 
 | | |
 |---|---|
-| PonsVaultLauncher | `0xFEd8eac01b1dDD38C0EF4ae7b626Ce135Eba643B` |
-| BuybackBurnVaultFactory | `0xAf4Cfd177BAe183DA98774f7408F9A57c820b204` |
-| Vault beacon | `0x621E3c3AF5165E914D6CCac028Acb167e361Fdeb` |
-| Factory owner | `0xCD0875124415A61D0d9082496AE8e88c2d55a642` ⚠️ exposed |
+| PonsVaultRegistry | `0x770c1AA562f7DfA60934959585DaECf2d9AD32be` |
+| PonsVaultLauncher | `0x815A82C9D1964D023a7e74b5BC20A5a1260F22aD` |
+| BuybackBurnVaultFactory | `0x3926af4490B4BA5Af78d785DD9Ba527B383C1B1e` |
+| — beacon | `0x95bEf3Ba39ED9C5aDb265A714ce90c3E102e9B7E` |
+| — implementation | `0x0769730FaDaA0a1C96853f2115De68Ff5d3d2577` |
+| StakingVaultFactory | `0x1d8B2395E7e5D059544c29f3ee9100fcab0FbbcC` |
+| — beacon | `0xE63445734036E56c81353f77B7DdE2C49Cbfc770` |
+| — implementation | `0x7C1459C681F9E96bb66931387a05e3676410b4b3` |
+| Owner of all three | `0x45e9E2A1BB0798dd3722c24f6bb31112dAf6DcD5` ⚠️ exposed |
+| Keeper (gas only) | `0xCD0875124415A61D0d9082496AE8e88c2d55a642` ⚠️ exposed |
 | pons locker | `0x736D76699C26D0d966744cAe304C000d471f7F35` |
 | pons factory | `0xA5aAb3F0c6EeadF30Ef1D3Eb997108E976351feB` |
 | WETH | `0x0Bd7D308f8E1639FAb988df18A8011f41EAcAD73` |
+
+The previous launcher (`0xFEd8eac0…`) predated the registry. SBX was launched
+through it, so this launcher has no record of it and its vault panel is gone —
+the old buyback factory is not registered here. It was a throwaway test token;
+the alternative was carrying legacy plumbing permanently for one row.
 
 Test token **SBX (Sandbox)** — `0xa84b9f3b386a4875e524a0c35a4569ce85a1d083`,
 vault `0x97BC2F82E978C373e9a3a25Cae751e7E9CfAbd15`. Launched via
