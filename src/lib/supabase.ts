@@ -1,5 +1,9 @@
-// Server-side only — uses the service role key.
-// Never import this from client components.
+// Server-side only — holds the service role key, which bypasses row-level
+// security entirely. Importing this from a client component would compile that
+// key into the browser bundle and hand every visitor full write access to the
+// database, which is not a mistake a comment can be trusted to prevent: the
+// import below makes it fail the build instead.
+import 'server-only';
 
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
