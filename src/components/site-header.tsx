@@ -31,7 +31,6 @@ export function SiteHeader() {
       <div className="nav-inner">
         <div className="nav-left">
           <Link href="/" className="pv-brand" aria-label="PonsVault home">
-            <span className="pv-brand-mark">P</span>
             <span className="pv-brand-text">PonsVault</span>
           </Link>
         </div>
