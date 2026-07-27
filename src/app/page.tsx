@@ -146,6 +146,12 @@ const TEMPLATES = [
     body: 'Fees accumulate into a prize pool and pay out to a holder drawn on-chain each round.',
     params: ['Round length', 'Prize share', 'Eligibility', 'Draw source'],
   },
+  {
+    name: 'RWA Tax',
+    status: 'soon' as const,
+    body: 'ETH is reserved for tokenized-stock purchases. Keepers sell supported RWA assets to the vault, and holders can claim RWA dividends.',
+    params: ['Reserve share', 'Supported assets'],
+  },
 ];
 
 function Templates() {

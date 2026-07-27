@@ -21,7 +21,12 @@ import type { LaunchFormInput, PonsLaunchMetadata } from './types';
 /* templates                                                                  */
 /* -------------------------------------------------------------------------- */
 
-export type VaultTemplateId = 'none' | 'buyback-burn' | 'staking' | 'lottery';
+/**
+ * `none` is no longer offered in the picker — every launch gets a vault — but the
+ * id stays, because it still describes tokens that were launched without one and
+ * is the fallback while no launcher is configured.
+ */
+export type VaultTemplateId = 'none' | 'buyback-burn' | 'staking' | 'lottery' | 'rwa-tax';
 
 export interface VaultTemplate {
   id: VaultTemplateId;
@@ -50,10 +55,11 @@ export const VAULT_TEMPLATES: VaultTemplate[] = [
     status: 'soon',
   },
   {
-    id: 'none',
-    name: 'No vault',
-    tagline: 'Creator fees accrue to the wallet you launch from.',
-    status: 'available',
+    id: 'rwa-tax',
+    name: 'RWA Tax',
+    tagline:
+      'ETH is reserved for tokenized-stock purchases. Keepers sell supported RWA assets to the vault, and holders can claim RWA dividends.',
+    status: 'soon',
   },
 ];
 

@@ -276,6 +276,12 @@ export default function DocsPage() {
               being designed — picking a winner fairly on-chain is harder than it sounds when anyone
               can trigger the draw.
             </p>
+
+            <h3>RWA Tax — in development</h3>
+            <p>
+              ETH is reserved for tokenized-stock purchases. Keepers sell supported RWA assets to the
+              vault, and holders can claim RWA dividends.
+            </p>
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">

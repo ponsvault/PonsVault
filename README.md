@@ -11,6 +11,7 @@ Every pons token earns creator fees from trading. Normally those fees accrue to 
 - **Buyback & Burn** — fees buy the token off the market and burn it (available today)
 - **Staking** — holders stake the token and earn the fees in WETH, pro rata (available today)
 - **Lottery** — fees fund a prize pool paid to a holder each round (planned)
+- **RWA Tax** — ETH is reserved for tokenized-stock purchases; keepers sell supported RWA assets to the vault, and holders claim RWA dividends (planned)
 
 Vault parameters are set once, at launch. None of them has a setter, so nobody can change them afterwards — not the creator, and not us. Triggering a vault is permissionless: anyone can call `run()`, and the vault pays for itself out of the fees it collects.
 

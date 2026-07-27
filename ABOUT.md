@@ -27,8 +27,9 @@ A vault removes the trust. Fees are redirected to a contract at launch, and the 
 | **Buyback & Burn** | Fees buy the token off the market and burn it | Available |
 | **Staking** | Holders stake the token and earn fees in WETH, pro rata | Available |
 | **Lottery** | Fees fund a prize pool paid to a holder each round | Planned |
+| **RWA Tax** | ETH is reserved for tokenized-stock purchases; keepers sell supported RWA assets to the vault, and holders claim RWA dividends | Planned |
 
-Each template has its own parameters — a lottery is configured by round length and prize share, not by a burn share. Launching without a vault is also supported, in which case fees accrue to your own wallet as they normally would.
+Each template has its own parameters — a lottery is configured by round length and prize share, not by a burn share. Every launch attaches a vault; the picker no longer offers a bare launch that leaves fees in your own wallet.
 
 ---
 

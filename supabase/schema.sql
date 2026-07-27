@@ -32,7 +32,7 @@ create table if not exists ponsvault_launches (
   vault_template     text
                                check (
                                  vault_template is null
-                                 or vault_template in ('buyback-burn', 'staking', 'lottery')
+                                 or vault_template in ('buyback-burn', 'staking', 'lottery', 'rwa-tax')
                                ),
   transaction_hash   text        not null,
   launched_at        timestamptz not null,

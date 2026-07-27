@@ -448,6 +448,7 @@ redeploying before launch.
 | Buyback & Burn | shipped |
 | Staking | built and tested, not yet deployed |
 | Lottery | not started — see below |
+| RWA Tax | not started — described on the site, undesigned |
 
 **Staking** is written, covered by eleven fork tests, and wired end to end through
 the launch form, token page, keeper and explore cards. It has never been

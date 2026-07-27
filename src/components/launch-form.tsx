@@ -543,9 +543,7 @@ export function LaunchForm() {
 
             <div className="vault-picker" role="radiogroup" aria-label="Vault template">
               {VAULT_TEMPLATES.map((template) => {
-                const selectable =
-                  template.status === 'available' &&
-                  (template.id === 'none' || vaultsAvailable);
+                const selectable = template.status === 'available' && vaultsAvailable;
                 const selected = form.vaultTemplate === template.id;
 
                 return (
