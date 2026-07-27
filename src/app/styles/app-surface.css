@@ -65,7 +65,7 @@
 .launchpad-prefixed-input:focus-within,
 .launchpad-buy-field:focus-within {
   border-color: rgba(212, 252, 80, 0.5);
-  box-shadow: rgba(212, 252, 80, 0.1) 0 0 0 2px;
+  box-shadow: none;
 }
 
 .launchpad-prefixed-input input {
