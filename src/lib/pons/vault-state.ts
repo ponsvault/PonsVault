@@ -53,6 +53,13 @@ export const PONS_VAULT_ABI = [
   },
   { type: 'function', name: 'pool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'template', stateMutability: 'pure', inputs: [], outputs: [{ type: 'string' }] },
+  // Listed so a revert decodes to its name rather than a bare four-byte
+  // signature. Without these viem can only report the selector, which turns
+  // every distinct failure into the same unreadable line in the keeper log.
+  { type: 'error', name: 'NothingToHarvest', inputs: [] },
+  { type: 'error', name: 'ZeroAddress', inputs: [] },
+  { type: 'error', name: 'InvalidBurnBps', inputs: [{ name: 'burnBps', type: 'uint16' }] },
+  { type: 'error', name: 'TreasuryRequired', inputs: [] },
 ] as const;
 
 /** Reads and actions exposed by a deployed PonsStakingVault. */
@@ -140,6 +147,28 @@ export const PONS_STAKING_VAULT_ABI = [
     ],
   },
   { type: 'function', name: 'template', stateMutability: 'pure', inputs: [], outputs: [{ type: 'string' }] },
+  // See the note on the buyback ABI: these exist so a revert reads as a name.
+  { type: 'error', name: 'NothingToHarvest', inputs: [] },
+  { type: 'error', name: 'NoStakers', inputs: [] },
+  { type: 'error', name: 'ZeroAmount', inputs: [] },
+  { type: 'error', name: 'InvalidLockPeriod', inputs: [] },
+  {
+    type: 'error',
+    name: 'StakeTooSmall',
+    inputs: [
+      { name: 'amount', type: 'uint256' },
+      { name: 'minimum', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'error',
+    name: 'InsufficientStake',
+    inputs: [
+      { name: 'staked', type: 'uint256' },
+      { name: 'requested', type: 'uint256' },
+    ],
+  },
+  { type: 'error', name: 'StakeLocked', inputs: [{ name: 'unlockAt', type: 'uint256' }] },
 ] as const;
 
 /** Everything every template has, whatever it does with the fees. */
