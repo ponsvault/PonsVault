@@ -33,15 +33,13 @@ contract PonsVaultLauncher is IPonsFeeCollector {
     error InsufficientLaunchFee(uint256 required, uint256 provided);
     error VaultNotCreated();
     error NotLaunchedHere(address token);
-    error NothingToClaim();
+    error NothingToSweep();
 
     event Launched(
         address indexed token, address indexed vault, address indexed creator, bytes32 templateId
     );
 
-    /// @notice Initial buy delivered to the creator. `deferred` when the token's own launch
-    ///         restrictions blocked the immediate transfer and it must be claimed instead.
-    event DevBuyDelivered(address indexed token, address indexed creator, uint256 amount, bool deferred);
+    event SweptToCreator(address indexed token, address indexed creator, uint256 amount);
 
     /// @notice The pons launchpad factory this launcher deploys through.
     IPonsLaunchpad public immutable launchpad;
@@ -101,7 +99,11 @@ contract PonsVaultLauncher is IPonsFeeCollector {
         uint256 fee = launchpad.launchFee();
         if (msg.value < fee) revert InsufficientLaunchFee(fee, msg.value);
 
-        metadata.feeWallet = address(this);
+        // pons pays the initial buy to `feeWallet`, not to the caller, so this must name the creator:
+        // pointing it here would hand the launcher tokens the creator paid for, and nothing on this
+        // contract could give them back. The redirect it seeds is overwritten below, in this same
+        // transaction, so no fee can ever accrue to the creator's wallet.
+        metadata.feeWallet = msg.sender;
         token = launchpad.launchToken{value: msg.value}(metadata, launchConfigId, dexId, salt);
 
         vault = factory.createVault(token, locker, vaultConfig);
@@ -115,49 +117,28 @@ contract PonsVaultLauncher is IPonsFeeCollector {
         templateOf[token] = templateId;
         creatorOf[token] = msg.sender;
 
-        _deliverDevBuy(token, msg.sender);
-
         emit Launched(token, vault, msg.sender, templateId);
     }
 
-    /// @notice Send a launch's initial buy on to the creator.
-    /// @dev pons credits the buy to whoever called `launchToken`, which is this contract, so without
-    ///      this the creator pays for tokens that stay here — and nothing else on this contract can
-    ///      move an ERC-20, so they would be stranded permanently.
+    /// @notice Send any tokens sitting in this contract to the creator of that token's launch.
+    /// @dev Insurance, not part of the launch path: {launchWithVault} names the creator as the fee
+    ///      wallet, so the initial buy is paid directly to them and this contract should never hold a
+    ///      balance. It exists because this launcher is immutable and is the on-chain deployer of
+    ///      every token it creates, so it can never be replaced — and a stranded balance with no way
+    ///      out is exactly the failure this contract had before.
     ///
-    ///      Failure must not revert the launch. A pons token enforces per-wallet and per-transaction
-    ///      caps for a window after launch, and a large enough initial buy trips them, which would
-    ///      otherwise make a perfectly good launch impossible. When that happens the tokens stay here
-    ///      and {claimDevBuy} hands them over once the window closes.
-    function _deliverDevBuy(address token, address creator) private {
-        uint256 amount = IERC20(token).balanceOf(address(this));
-        if (amount == 0) return;
-
-        // `transfer` rather than `safeTransfer`: this needs to observe the failure, not bubble it.
-        bool delivered;
-        try IERC20(token).transfer(creator, amount) returns (bool ok) {
-            delivered = ok;
-        } catch {
-            delivered = false;
-        }
-
-        emit DevBuyDelivered(token, creator, amount, !delivered);
-    }
-
-    /// @notice Hand a launch's held initial buy to the creator who paid for it.
-    /// @dev Permissionless to call but not to direct: the destination is always the recorded creator,
-    ///      so anyone can unstick a launch without being able to redirect it. Only reachable for
-    ///      tokens this launcher launched, and the launcher never holds fees — the locker pays the
-    ///      vault directly — so an initial buy is the only balance this can ever move.
-    function claimDevBuy(address token) external returns (uint256 amount) {
+    ///      Permissionless to call but not to direct: the destination is always the recorded creator,
+    ///      so anyone can unstick a launch and nobody can redirect one. Fees are not reachable this
+    ///      way — the locker pays the vault directly and fees never touch this contract.
+    function sweepToCreator(address token) external returns (uint256 amount) {
         address creator = creatorOf[token];
         if (creator == address(0)) revert NotLaunchedHere(token);
 
         amount = IERC20(token).balanceOf(address(this));
-        if (amount == 0) revert NothingToClaim();
+        if (amount == 0) revert NothingToSweep();
 
         IERC20(token).safeTransfer(creator, amount);
-        emit DevBuyDelivered(token, creator, amount, false);
+        emit SweptToCreator(token, creator, amount);
     }
 
     /// @inheritdoc IPonsFeeCollector

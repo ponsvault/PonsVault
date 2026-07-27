@@ -128,18 +128,31 @@ contract PonsVaultLauncherForkTest is Test {
         assertEq(vault.totalTreasuryPaid(), 0, "burnBps 10000 leaves nothing for treasury");
     }
 
-    /// @dev pons credits a launch's initial buy to whoever called `launchToken`, which is the
-    ///      launcher — not the creator who paid for it. Every launch in this suite passes a dev buy,
-    ///      and none of them checked where it landed, so it sat in the launcher permanently: nothing
-    ///      else on that contract can move an ERC-20, and it is immutable by design.
+    /// @dev pons pays a launch's initial buy to `metadata.feeWallet`, not to the caller. The launcher
+    ///      used to name itself there, so the creator paid for tokens that landed in a contract with
+    ///      no way to move an ERC-20 and no way to be replaced. Every launch in this suite passes a
+    ///      dev buy and none of them checked where it went, which is how that survived.
     function test_devBuyReachesTheCreator() public {
         (address token,) = _launch(keccak256("pons-vault-salt-devbuy"));
 
         assertGt(IERC20(token).balanceOf(creator), 0, "creator must receive the initial buy they paid for");
-        assertEq(IERC20(token).balanceOf(address(launcher)), 0, "launcher must not keep the initial buy");
+        assertEq(IERC20(token).balanceOf(address(launcher)), 0, "launcher must never hold the initial buy");
     }
 
-    /// @dev The forwarding must not invent a transfer when there was no initial buy.
+    /// @dev Naming the creator as fee wallet seeds the locker's redirect with their wallet, so the
+    ///      launch has to overwrite it. If it ever failed to, fees would silently pay the creator
+    ///      directly and the vault would never see a thing — which looks fine until nothing burns.
+    function test_devBuyToCreatorStillLeavesFeesGoingToTheVault() public {
+        (address token, address vault) = _launch(keccak256("pons-vault-salt-devbuy-redirect"));
+
+        assertEq(
+            IPonsLocker(PonsAddresses.PONS_ACTIVE_LOCKER).feeRedirects(token),
+            vault,
+            "redirect must end up at the vault, not the creator who received the dev buy"
+        );
+        assertTrue(vault != creator, "sanity: vault is not the creator");
+    }
+
     function test_launchWithoutDevBuyMovesNothing() public {
         uint256 fee = LAUNCHPAD.launchFee();
         vm.prank(creator);
@@ -151,35 +164,34 @@ contract PonsVaultLauncherForkTest is Test {
         assertEq(IERC20(token).balanceOf(address(launcher)), 0, "and nothing held back");
     }
 
-    /// @dev The deferred path, for when a token's post-launch caps block the immediate transfer.
-    ///      Anyone may trigger it; only the recorded creator can receive it.
-    function test_claimDevBuyPaysTheCreatorNotTheCaller() public {
-        (address token,) = _launch(keccak256("pons-vault-salt-claim"));
+    /// @dev The insurance path. Anyone may trigger it; only the recorded creator can receive it.
+    function test_sweepToCreatorPaysTheCreatorNotTheCaller() public {
+        (address token,) = _launch(keccak256("pons-vault-salt-sweep"));
 
-        // Stand in for a launch whose immediate transfer was refused by the token.
+        // Stand in for tokens reaching the launcher by some route the launch path does not create.
         deal(token, address(launcher), 1_000e18);
         uint256 creatorBefore = IERC20(token).balanceOf(creator);
 
         address opportunist = makeAddr("opportunist");
         vm.prank(opportunist);
-        uint256 claimed = launcher.claimDevBuy(token);
+        uint256 swept = launcher.sweepToCreator(token);
 
-        assertEq(claimed, 1_000e18, "claim moves the whole held balance");
+        assertEq(swept, 1_000e18, "sweep moves the whole held balance");
         assertEq(IERC20(token).balanceOf(creator) - creatorBefore, 1_000e18, "creator receives it");
         assertEq(IERC20(token).balanceOf(opportunist), 0, "the caller receives nothing");
         assertEq(IERC20(token).balanceOf(address(launcher)), 0, "nothing left behind");
     }
 
-    function test_claimDevBuyRejectsTokensThisLauncherDidNotLaunch() public {
+    function test_sweepRejectsTokensThisLauncherDidNotLaunch() public {
         vm.expectRevert(abi.encodeWithSelector(PonsVaultLauncher.NotLaunchedHere.selector, PonsAddresses.WETH));
-        launcher.claimDevBuy(PonsAddresses.WETH);
+        launcher.sweepToCreator(PonsAddresses.WETH);
     }
 
-    function test_claimDevBuyRevertsWhenNothingIsHeld() public {
-        (address token,) = _launch(keccak256("pons-vault-salt-empty-claim"));
+    function test_sweepRevertsWhenNothingIsHeld() public {
+        (address token,) = _launch(keccak256("pons-vault-salt-empty-sweep"));
 
-        vm.expectRevert(PonsVaultLauncher.NothingToClaim.selector);
-        launcher.claimDevBuy(token);
+        vm.expectRevert(PonsVaultLauncher.NothingToSweep.selector);
+        launcher.sweepToCreator(token);
     }
 
     function test_collectIsPermissionless() public {
