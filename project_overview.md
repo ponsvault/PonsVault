@@ -159,7 +159,16 @@ Permissionless, and the whole template in five steps:
    **entire** token balance to `0x…dEaD`. "Entire" matters: it burns the bought
    tokens and the harvested token-side fees together, and the latter never
    needed a swap.
-5. Any remainder goes to the treasury, only when `burnBps < 100%`.
+5. The remainder goes to the treasury as **WETH**, only when `burnBps < 100%`, and
+   last of all — so a swap that reverts takes the whole run with it rather than
+   paying the treasury out of a half-executed run.
+
+Two things about the split are easy to get wrong. It is computed on the WETH
+**before** the swap, so the treasury's share never enters the pool and the treasury
+never holds any of the token. And because step 4 burns the entire token balance,
+token-side fees are burned in full regardless of `burnBps` — the treasury has no
+claim on them, which makes the effective burn share slightly higher than the
+configured one.
 
 The vault ends every run holding zero WETH and zero tokens. That is what makes
 "nothing to withdraw" a fact about the code rather than a promise.
@@ -346,12 +355,25 @@ Recording is best-effort and never raises: a tick that did its work but could no
 write its own history has still done the work, and failing the request over
 bookkeeping would turn a monitoring gap into an outage.
 
-Two audit scripts cover the seams the test suites structurally cannot see, since
-forge only ever speaks Solidity and the app only ever speaks TypeScript:
-`scripts/audit-abi-seam.mjs` diffs every hand-written TS ABI against the compiled
-contracts, and `scripts/audit-config-bytes.ts` prints the real calldata the launch
-form produces, which `test/VaultConfigDecoding.t.sol` then decodes with the
-factories' own types. Regenerate the literals in that test whenever a Config
+### Covering the TypeScript/Solidity seam
+
+Forge only ever speaks Solidity and the app only ever speaks TypeScript, so neither
+suite can see the join between them. A wrong selector, a mis-encoded tuple or a
+launcher address the frontend never followed all look perfectly healthy from inside
+either one. Three things cover it:
+
+- `scripts/audit-abi-seam.mjs` diffs every hand-written TS ABI against the compiled
+  contracts.
+- `scripts/audit-config-bytes.ts` prints the real config bytes the form produces,
+  which `test/VaultConfigDecoding.t.sol` decodes with the factories' own types.
+- `scripts/emit-launch-calldata.ts` writes `test/fixtures/LaunchCalldata.sol` — the
+  literal transactions a wallet would sign — and `test/WebsiteLaunch.fork.t.sol`
+  **executes them against the launcher that is actually deployed**, asserting the
+  vault gets the config that was typed into the form and that the creator receives
+  the dev buy. This is the check that fails if the launcher is redeployed and the
+  frontend is not updated to match.
+
+Regenerate both fixtures whenever the form, a Config, or the deployed launcher
 changes.
 
 Readiness is decided by **simulating `run()`**, never by `canRun()` (§4). A
@@ -477,13 +499,15 @@ redeploying before launch.
 | Template | Status |
 |---|---|
 | Buyback & Burn | shipped |
-| Staking | built and tested, not yet deployed |
+| Staking | deployed and proven through the site's own calldata, never launched against |
 | Lottery | not started — see below |
 | RWA Tax | not started — described on the site, undesigned |
 
 **Staking** is written, covered by eleven fork tests, and wired end to end through
-the launch form, token page, keeper and explore cards. It has never been
-deployed or launched against; it goes live with the registry redeploy.
+the launch form, token page, keeper and explore cards. Its factory is registered on
+the live registry, and `test_websiteStakingLaunch` proves a launch through the form
+produces a staking vault with the lock period that was typed in. No real token has
+been launched with one yet.
 
 One bug worth remembering, found by auditing it against the buyback rather than
 by any test. `run()` used to distribute what its own harvest returned. But
@@ -521,18 +545,21 @@ off the roadmap as an active build.
 
 **Blocking any real launch**
 
-- Redeploy the factory and launcher from a key that is not compromised;
-  ideally a multisig, then `lockUpgrades()` once the implementation settles.
-- Host the keeper. It currently runs only from a local machine.
-- Nothing is deployed. No hosting, no domain, no cron.
+- Redeploy the whole stack from a key that is not compromised; ideally a multisig,
+  then `lockUpgrades()` once the implementation settles. The current owner key is
+  public, so this stack can never hold real value.
+- Deploy the site. Vercel cron fires **only on production deployments**, so until
+  then there is no keeper regardless of what `vercel.json` says.
+- Run `supabase/add-keeper-ticks.sql`, or `/api/keeper/status` has no table to read.
 
 **Known gaps**
 
 - `canRun()` and `totalWethHarvested` (§4) — fix on the next upgrade.
 - Contracts are unverified on Blockscout (deliberately, to keep the branding off
   a throwaway deployment).
-- The deployed launcher predates staking, so the current test stack cannot
-  launch one. Redeploying orphans the SBX vault (the new launcher's
-  `vaultOf(SBX)` returns zero, so its panel disappears).
+- SBX is orphaned. It was launched by the first launcher, so the current one's
+  `vaultOf(SBX)` returns zero and its panel does not render. Its 1,458,415 stranded
+  tokens are unrecoverable — see §2.
 - Two of four templates still unavailable.
-- No tests for the keeper.
+- No tests for the keeper. `WebsiteLaunch.fork.t.sol` covers the launch path end to
+  end, but nothing exercises `runDueVaults` itself.
