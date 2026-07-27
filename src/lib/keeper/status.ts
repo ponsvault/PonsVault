@@ -127,14 +127,22 @@ export async function readKeeperStatus(limit = 12): Promise<KeeperStatus> {
   }
 
   const ageSeconds = Math.max(0, Math.round((Date.now() - Date.parse(latest.ran_at)) / 1000));
-  const healthy = ageSeconds <= STALE_AFTER_SECONDS;
+
+  // Recency alone is not health. A keeper whose every pass throws still ticks on
+  // schedule, so judging by age would report a permanently broken keeper — a bad
+  // key, an unreachable RPC — as fine right up until someone noticed the burns
+  // had stopped. Both failures have to fail the check.
+  const stale = ageSeconds > STALE_AFTER_SECONDS;
+  const failed = Boolean(latest.error);
 
   return {
     observed: true,
-    healthy,
-    reason: healthy
-      ? `Last tick ${ageSeconds}s ago.`
-      : `No tick for ${ageSeconds}s, over the ${STALE_AFTER_SECONDS}s threshold. The schedule is probably not firing.`,
+    healthy: !stale && !failed,
+    reason: stale
+      ? `No tick for ${ageSeconds}s, over the ${STALE_AFTER_SECONDS}s threshold. The schedule is probably not firing.`
+      : failed
+        ? `Last tick ran ${ageSeconds}s ago but failed: ${latest.error}`
+        : `Last tick ${ageSeconds}s ago.`,
     lastTickAt: latest.ran_at,
     ageSeconds,
     staleAfterSeconds: STALE_AFTER_SECONDS,
