@@ -1,4 +1,12 @@
-import { createWalletClient, formatEther, http, parseEther, type Address } from 'viem';
+import {
+  BaseError,
+  ContractFunctionRevertedError,
+  createWalletClient,
+  formatEther,
+  http,
+  parseEther,
+  type Address,
+} from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 
 import { robinhoodChain } from '@/lib/pons/chain';
@@ -78,10 +86,14 @@ interface VaultRef {
  * `weth` and `tokens` are what a run moved, deliberately named for neither
  * template: buyback-and-burn spends the WETH and burns the tokens, staking
  * hands both to its stakers.
+ *
+ * `weth` is always the whole harvest, not the part any one template happens to
+ * return. See {@link harvestedWeth} for why those differ.
  */
 export type VaultRunOutcome = VaultRef &
   (
     | { status: 'ran'; hash: `0x${string}`; weth: string; tokens: string }
+    | { status: 'would-run'; weth: string; tokens: string }
     | { status: 'not-ready'; reason: string }
     | { status: 'throttled'; nextRunIn: number }
     | { status: 'below-floor'; weth: string; floor: string }
@@ -97,19 +109,109 @@ export interface KeeperTickResult {
   outcomes: VaultRunOutcome[];
 }
 
+export interface RunDueVaultsOptions {
+  /**
+   * Decide everything, send nothing.
+   *
+   * Every threshold here is invisible from the outside until a run either
+   * happens or conspicuously does not, which makes a change to the decision
+   * logic hard to check without waiting for the next real burn. This runs the
+   * same path and stops at the write, so "what would the keeper do right now"
+   * is answerable on demand.
+   */
+  dryRun?: boolean;
+}
+
 function keeperAccount() {
   const key = (process.env.KEEPER_PRIVATE_KEY ?? '').trim();
   if (!key) throw new Error('KEEPER_PRIVATE_KEY is not set.');
   return privateKeyToAccount((key.startsWith('0x') ? key : `0x${key}`) as `0x${string}`);
 }
 
-/** Reverts carry the contract's own reason; anything else is a plain message. */
+/**
+ * Why a call failed, in the most specific form available.
+ *
+ * The vaults revert with custom errors rather than strings, and viem renders
+ * those as a message whose useful half — the error itself — sits on a second
+ * line. Truncating at the newline, as this used to, logged every distinct
+ * failure as the identical prefix `reverted with the following signature:`,
+ * which made "nobody has staked" and "no fees yet" indistinguishable in the
+ * tick history. Walking the error for the decoded name is what makes the
+ * outcome readable; the string and shortMessage paths remain for reverts that
+ * come from outside our own contracts, such as the router's.
+ */
 function reasonOf(error: unknown): string {
+  if (error instanceof BaseError) {
+    const reverted = error.walk((e) => e instanceof ContractFunctionRevertedError);
+    if (reverted instanceof ContractFunctionRevertedError) {
+      const name = reverted.data?.errorName;
+      if (name) {
+        const args = reverted.data?.args;
+        return args && args.length > 0 ? `${name}(${args.join(', ')})` : name;
+      }
+      if (reverted.reason) return reverted.reason;
+      if (reverted.signature) return `Unrecognised error ${reverted.signature}`;
+    }
+  }
+
   if (!(error instanceof Error)) return 'Unknown error';
   const match = /reverted with the following reason:\s*\n?(.+)/.exec(error.message);
   if (match) return match[1].trim();
   const short = (error as { shortMessage?: string }).shortMessage;
   return (short ?? error.message).split('\n')[0].slice(0, 200);
+}
+
+const BPS_DENOMINATOR = 10_000n;
+
+/**
+ * A buyback vault's `burnBps`, read once and kept for the life of the process.
+ *
+ * Vault config is immutable, so the value read now is the value forever.
+ */
+const burnBpsCache = new Map<Address, bigint>();
+
+async function burnBpsOf(vault: Address): Promise<bigint> {
+  const cached = burnBpsCache.get(vault);
+  if (cached !== undefined) return cached;
+
+  const [burnBps] = await robinhoodPublicClient.readContract({
+    address: vault,
+    abi: PONS_VAULT_ABI,
+    functionName: 'config',
+  });
+
+  const value = BigInt(burnBps);
+  burnBpsCache.set(vault, value);
+  return value;
+}
+
+/**
+ * The WETH a run moves in total, from whatever its template chose to return.
+ *
+ * Staking returns everything it distributed, so it is already the whole
+ * harvest. Buyback-and-burn returns only the slice it spends on the swap —
+ * `wethBalance * burnBps / 10000` — while the remainder goes to the treasury in
+ * the same call. Comparing that slice against the keeper's floor understates
+ * every run by a factor of `1/burnBps`, so a vault burning 40% had to reach
+ * 2.5x its own `minHarvestWei` before the keeper would act, even though the
+ * contract's gate had long since opened. Scaling back up puts the keeper and
+ * the vault on the same quantity, which is the one the creator configured.
+ *
+ * `burnBps` cannot be zero — the vault's own `_validate` rejects that — so the
+ * division is always safe.
+ */
+async function harvestedWeth(vault: Address, template: VaultTemplate, returned: bigint): Promise<bigint> {
+  if (template !== 'buyback-burn') return returned;
+
+  try {
+    const burnBps = await burnBpsOf(vault);
+    if (burnBps <= 0n) return returned;
+    return (returned * BPS_DENOMINATOR) / burnBps;
+  } catch {
+    // Fall back to the understated figure rather than skipping the vault: too
+    // cautious costs a delayed run, guessing high costs a wasted transaction.
+    return returned;
+  }
 }
 
 type Keeper = ReturnType<typeof keeperAccount>;
@@ -199,7 +301,7 @@ async function tokenSymbol(token: Address): Promise<string> {
  * where fees are still sitting in the locker. A simulation answers the only
  * question that matters — would this transaction succeed, and what would it do.
  */
-export async function runDueVaults(): Promise<KeeperTickResult> {
+export async function runDueVaults(options: RunDueVaultsOptions = {}): Promise<KeeperTickResult> {
   const account = keeperAccount();
   const wallet = createWalletClient({
     account,
@@ -279,14 +381,18 @@ export async function runDueVaults(): Promise<KeeperTickResult> {
       continue;
     }
 
-    let weth: bigint;
+    let returnedWeth: bigint;
     let tokens: bigint;
     try {
-      [weth, tokens] = await runner.simulate();
+      [returnedWeth, tokens] = await runner.simulate();
     } catch (error) {
       outcomes.push({ ...ref, status: 'not-ready', reason: reasonOf(error) });
       continue;
     }
+
+    // Every decision below is about the whole harvest, which is not what every
+    // template returns.
+    const weth = await harvestedWeth(vault, template, returnedWeth);
 
     // A run that moves nothing at all is a wasted transaction even if it succeeds.
     if (weth === 0n && tokens === 0n) {
@@ -328,6 +434,16 @@ export async function runDueVaults(): Promise<KeeperTickResult> {
         status: 'uneconomic',
         weth: formatEther(weth),
         gasCost: formatEther(gasCost),
+      });
+      continue;
+    }
+
+    if (options.dryRun) {
+      outcomes.push({
+        ...ref,
+        status: 'would-run',
+        weth: formatEther(weth),
+        tokens: formatEther(tokens),
       });
       continue;
     }
