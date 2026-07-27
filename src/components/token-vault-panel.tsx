@@ -30,6 +30,8 @@ interface TokenVaultPanelProps {
   /** Creator-share fees still sitting in the locker, as wei strings. */
   pendingCreatorWeth?: string | null;
   pendingCreatorToken?: string | null;
+  /** Creator cut of pool fees, e.g. 70. Used only for the queued label. */
+  creatorSharePercent?: number;
 }
 
 /**
@@ -75,6 +77,7 @@ export function TokenVaultPanel({
   symbol,
   pendingCreatorWeth,
   pendingCreatorToken,
+  creatorSharePercent = 70,
 }: TokenVaultPanelProps) {
   const publicClient = usePublicClient();
 
@@ -125,6 +128,7 @@ export function TokenVaultPanel({
         state={state}
         nowSeconds={nowSeconds}
         harvestable={state.pendingWeth + toBigInt(pendingCreatorWeth)}
+        creatorSharePercent={creatorSharePercent}
         onChanged={() => refetch()}
       />
     );
@@ -136,6 +140,7 @@ export function TokenVaultPanel({
       state={state}
       pendingCreatorWeth={pendingCreatorWeth}
       pendingCreatorToken={pendingCreatorToken}
+      creatorSharePercent={creatorSharePercent}
       onChanged={() => refetch()}
     />
   );
@@ -146,6 +151,7 @@ interface BuybackVaultPanelProps {
   state: BuybackVaultState;
   pendingCreatorWeth?: string | null;
   pendingCreatorToken?: string | null;
+  creatorSharePercent: number;
   onChanged: () => void;
 }
 
@@ -154,6 +160,7 @@ function BuybackVaultPanel({
   state,
   pendingCreatorWeth,
   pendingCreatorToken,
+  creatorSharePercent,
   onChanged,
 }: BuybackVaultPanelProps) {
   const publicClient = usePublicClient();
@@ -367,6 +374,10 @@ function BuybackVaultPanel({
           <span className="pv-mono token-vault-pending-value">
             {formatWeth(harvestable)} WETH
             {burnableNow > 0n ? ` + ${formatTokens(burnableNow)} ${symbol.toUpperCase()}` : ''}
+          </span>
+          <span className="token-vault-pending-scope">
+            Vault share only — the {creatorSharePercent}% creator cut. Pool fees below show the
+            full gross.
           </span>
           <span className="token-vault-hint">{action.hint}</span>
         </div>
