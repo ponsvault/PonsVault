@@ -41,7 +41,12 @@ alter table keeper_ticks enable row level security;
 
 revoke all on table keeper_ticks from anon, authenticated;
 
+-- RESTRICTIVE, not the default PERMISSIVE. Permissive policies are OR'd together,
+-- so a `using (false)` permissive policy is a no-op — enabling RLS already denies
+-- everything — and it would not stop someone adding "enable read for all users"
+-- from the dashboard, since that OR would win. Restrictive policies are AND'd, so
+-- this forces false no matter what else is added later.
 create policy "deny_anon_all"
-  on keeper_ticks for all to anon using (false) with check (false);
+  on keeper_ticks as restrictive for all to anon using (false) with check (false);
 create policy "deny_authenticated_all"
-  on keeper_ticks for all to authenticated using (false) with check (false);
+  on keeper_ticks as restrictive for all to authenticated using (false) with check (false);
