@@ -37,16 +37,45 @@ The fix is to make a contract the deployer:
 user ──signs one tx──▶ PonsVaultLauncher.launchWithVault(…, templateId, configBytes)
                           │
                           ├─ registry.factoryFor(templateId)   ← fails early if unknown
-                          ├─ sets metadata.feeWallet = launcher (itself)
+                          ├─ sets metadata.feeWallet = the creator  ← see below
                           ├─ pons launchpad.launchToken()  ← launcher is now the deployer
                           ├─ factory.createVault(token, locker, configBytes)
-                          └─ locker.setFeeRedirect(token, vault)
+                          └─ locker.setFeeRedirect(token, vault)   ← overwrites the seed above
 ```
 
 The launcher is the deployer, so only the launcher may call `collectFees`. Its
 `collect()` has **no access control**, so in practice anyone may. Funds never
 touch the launcher: the locker pays the fee redirect, which already points at
 the vault.
+
+### Why the creator is named as fee wallet
+
+**pons pays a launch's initial buy to `metadata.feeWallet`, not to whoever called
+`launchToken`.** Confirmed on a fork: an EOA launching with a third-party fee
+wallet receives nothing at all, and the fee wallet receives the entire buy.
+
+This was originally set to the launcher, purely as a placeholder to be overwritten
+by `setFeeRedirect`. The effect was that a creator's dev buy landed in a contract
+with no function capable of moving an ERC-20, which is also immutable and can never
+be replaced. It is unrecoverable: the SBX test launch left 1,458,415 tokens in the
+first launcher permanently.
+
+Naming the creator fixes it at the source and costs nothing, since `setFeeRedirect`
+is deployer-only and the launcher is the deployer no matter what the fee wallet
+says. It beats transferring the balance afterwards, which was the first attempt: a
+pons token enforces per-wallet caps for a window after launch, so a large enough
+buy could refuse the transfer, and a mandatory transfer would then fail the whole
+launch.
+
+The cost is a trap worth stating plainly. The redirect is now seeded with the
+creator's own wallet, so the launch **must** overwrite it. If it ever did not, fees
+would pay the creator directly forever and the vault would sit empty — and that
+looks entirely healthy from the outside until somebody notices nothing has burned.
+`test_devBuyToCreatorStillLeavesFeesGoingToTheVault` exists for exactly that.
+
+Neither the audit nor the test suite caught the original bug, because every launch
+in the fork tests already passed `fee + 0.05 ether` and not one of them checked a
+token balance afterwards. The tests looked like they covered a dev buy.
 
 Three consequences follow, and most of the design is downstream of them:
 
@@ -399,7 +428,8 @@ stored.
 
 ## 8. Deployed (TEST ONLY)
 
-Chain 4663, registry stack, deployed at block **20939739**. **The owner is a
+Chain 4663, registry stack, deployed at block **20939739**; the launcher was
+replaced at block **20991727** to fix the initial-buy bug described in §2. **The owner is a
 private key that has been publicly exposed, so this stack can never hold real
 value** — anyone who has seen that key can upgrade the beacons and drain every
 vault created under it. It exists to test the full flow end to end.
@@ -411,7 +441,8 @@ powerless, the owner can drain everything and should be offline.
 | | |
 |---|---|
 | PonsVaultRegistry | `0x770c1AA562f7DfA60934959585DaECf2d9AD32be` |
-| PonsVaultLauncher | `0x815A82C9D1964D023a7e74b5BC20A5a1260F22aD` |
+| PonsVaultLauncher | `0x9dDE735093d92EAAD379BE685E62c6d449628f64` |
+| — superseded | `0x815A82C9D1964D023a7e74b5BC20A5a1260F22aD` (nothing launched through it) |
 | BuybackBurnVaultFactory | `0x3926af4490B4BA5Af78d785DD9Ba527B383C1B1e` |
 | — beacon | `0x95bEf3Ba39ED9C5aDb265A714ce90c3E102e9B7E` |
 | — implementation | `0x0769730FaDaA0a1C96853f2115De68Ff5d3d2577` |

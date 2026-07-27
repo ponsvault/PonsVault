@@ -17,11 +17,11 @@
  * as unavailable rather than building a transaction that would revert.
  */
 export const PONSVAULT_DEPLOYMENT = {
-  launcher: '0x815A82C9D1964D023a7e74b5BC20A5a1260F22aD',
+  launcher: '0x9dDE735093d92EAAD379BE685E62c6d449628f64',
   registry: '0x770c1AA562f7DfA60934959585DaECf2d9AD32be',
   buybackFactory: '0x3926af4490B4BA5Af78d785DD9Ba527B383C1B1e',
   stakingFactory: '0x1d8B2395E7e5D059544c29f3ee9100fcab0FbbcC',
-  startBlock: 20_939_739n,
+  startBlock: 20_991_727n,
 } as const;
 
 const ADDRESSES = PONSVAULT_DEPLOYMENT;
