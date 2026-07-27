@@ -15,8 +15,7 @@ const CONFIG: [string, string][] = [
   ['Template', 'Buyback & Burn'],
   ['Burn share', '80%'],
   ['Treasury', '20% · 0x2f4a…a91c'],
-  ['Cooldown', '6h'],
-  ['Price check', '5 min average · ±2%'],
+  ['Buys every', '0.05 WETH in fees'],
 ];
 
 const ACTIVITY: { time: string; label: string; value: string; burn?: boolean }[] = [

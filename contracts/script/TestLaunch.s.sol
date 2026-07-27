@@ -14,10 +14,8 @@ import {PonsBuybackBurnVault} from "../src/vaults/PonsBuybackBurnVault.sol";
 /// The token metadata is deliberately generic. This runs against mainnet, so the
 /// token it creates is permanent and public — it must not carry product branding.
 ///
-/// The config is tuned for testing, not for production: no cooldown and no minimum
-/// harvest so a run can be triggered immediately, the shortest legal TWAP window so
-/// the oracle becomes usable quickly, and a wide price tolerance so a thin pool does
-/// not revert the swap.
+/// The config is tuned for testing, not for production: no minimum harvest, so a run
+/// can be triggered as soon as any fee at all has accrued.
 ///
 /// LAUNCHER=0x... forge script script/TestLaunch.s.sol --rpc-url ... --broadcast
 contract TestLaunch is Script {
@@ -37,10 +35,7 @@ contract TestLaunch is Script {
         PonsBuybackBurnVault.Config memory cfg = PonsBuybackBurnVault.Config({
             burnBps: 10_000, // burn everything, so no treasury is required
             treasury: address(0),
-            minHarvestWei: 0,
-            cooldown: 0,
-            twapWindow: 60,
-            maxTickDeviation: 5000
+            minHarvestWei: 0
         });
 
         uint256 fee = launcher.launchpad().launchFee();

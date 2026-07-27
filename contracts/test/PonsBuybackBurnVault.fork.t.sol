@@ -37,14 +37,7 @@ contract PonsBuybackBurnVaultForkTest is Test {
     }
 
     function _config() internal view returns (PonsBuybackBurnVault.Config memory) {
-        return PonsBuybackBurnVault.Config({
-            burnBps: 8_000,
-            treasury: treasury,
-            minHarvestWei: 1,
-            cooldown: 1 hours,
-            twapWindow: 300,
-            maxTickDeviation: 200
-        });
+        return PonsBuybackBurnVault.Config({burnBps: 8_000, treasury: treasury, minHarvestWei: 1});
     }
 
     /// @dev Deployer-triggered sweep; funds land in the vault because the payout follows the redirect.
@@ -82,16 +75,6 @@ contract PonsBuybackBurnVaultForkTest is Test {
 
     /// @dev An address with no `deployer()` reports one of address zero, which no caller can match,
     ///      so a vault cannot be attached to something that is not a pons token.
-    function test_rejectsPriceToleranceTooTight() public {
-        PonsBuybackBurnVaultFactory fresh = new PonsBuybackBurnVaultFactory();
-        PonsBuybackBurnVault.Config memory cfg = _config();
-        cfg.maxTickDeviation = 1;
-
-        vm.prank(TOKEN_DEPLOYER);
-        vm.expectRevert(PonsBuybackBurnVault.InvalidTickDeviation.selector);
-        fresh.createVault(TOKEN, LOCKER, abi.encode(cfg));
-    }
-
     function test_cannotCreateVaultForNonToken() public {
         address notAToken = makeAddr("notAToken");
         address stranger = makeAddr("stranger");
@@ -109,8 +92,8 @@ contract PonsBuybackBurnVaultForkTest is Test {
         (uint256 pendingWeth,) = vault.idleBalances();
         uint256 deadBefore = IERC20(TOKEN).balanceOf(PonsAddresses.BURN_ADDRESS);
 
-        // Oracle history is not primed on pons pools, so the caller supplies an explicit floor.
-        (uint256 wethSpent, uint256 tokensBurned) = vault.run(1);
+        // Zero floor, which is what the site and the keeper send.
+        (uint256 wethSpent, uint256 tokensBurned) = vault.run(0);
 
         console.log("pending WETH  :", pendingWeth);
         console.log("weth spent    :", wethSpent);
@@ -133,43 +116,64 @@ contract PonsBuybackBurnVaultForkTest is Test {
     function test_runIsPermissionless() public {
         _sweepIntoVault();
         vm.prank(makeAddr("randomKeeper"));
-        (uint256 wethSpent,) = vault.run(1);
+        (uint256 wethSpent,) = vault.run(0);
         assertGt(wethSpent, 0, "any caller may trigger distribution");
     }
 
-    function test_cooldownBlocksImmediateSecondRun() public {
+    /// @dev Half of why no timer is needed: a run leaves nothing behind, so the next one starts
+    ///      from zero and has to wait for trading to refill the vault.
+    function test_runSpendsEverythingItHolds() public {
         _sweepIntoVault();
-        vault.run(1);
+        vault.run(0);
+
+        (uint256 leftoverWeth,) = vault.idleBalances();
+        assertEq(leftoverWeth, 0, "run leaves no WETH behind");
+
+        (bool ready,) = vault.canRun();
+        assertFalse(ready, "a drained vault is not runnable");
+    }
+
+    /// @dev The other half: a balance that exists but is not yet worth spending stays put. Note
+    ///      that a run's own swap pays pool fees, so a vault with a negligible floor really can
+    ///      run back to back — the floor, not a timer, is what makes the pacing meaningful.
+    function test_balanceBelowFloorCannotRun() public {
+        PonsBuybackBurnVaultFactory fresh = new PonsBuybackBurnVaultFactory();
+        PonsBuybackBurnVault.Config memory cfg = _config();
+        cfg.minHarvestWei = 1_000 ether;
+
+        vm.startPrank(TOKEN_DEPLOYER);
+        PonsBuybackBurnVault strict = PonsBuybackBurnVault(fresh.createVault(TOKEN, LOCKER, abi.encode(cfg)));
+        IPonsLocker(LOCKER).setFeeRedirect(TOKEN, address(strict));
+        vm.stopPrank();
+
         _sweepIntoVault();
+        (uint256 idleWeth,) = strict.idleBalances();
+        assertGt(idleWeth, 0, "fees did arrive");
 
-        vm.expectRevert(abi.encodeWithSelector(PonsVaultBase.CooldownActive.selector, block.timestamp + 1 hours));
-        vault.run(1);
+        (bool ready,) = strict.canRun();
+        assertFalse(ready, "a balance under the floor is not runnable");
 
-        vm.warp(block.timestamp + 1 hours);
-        vault.run(1);
+        vm.expectRevert(PonsVaultBase.NothingToHarvest.selector);
+        strict.run(0);
     }
 
     function test_revertsWhenNothingAccrued() public {
         vm.expectRevert(PonsVaultBase.NothingToHarvest.selector);
-        vault.run(1);
-    }
-
-    function test_oracleNotReadyRequiresExplicitMinOut() public {
-        _sweepIntoVault();
-        vm.assume(!vault.isOracleReady(300));
-        vm.expectRevert(PonsVaultBase.OracleNotReady.selector);
         vault.run(0);
     }
 
-    function test_primeOracleIsPermissionless() public {
-        vm.prank(makeAddr("anyone"));
-        vault.primeOracle(24);
+    /// @dev The vault checks no price of its own, so `amountOutMinimum` is all a caller who wants a
+    ///      guarantee has. A floor the pool cannot fill aborts the whole run rather than buying.
+    function test_callerSuppliedFloorStillApplies() public {
+        _sweepIntoVault();
+        vm.expectRevert();
+        vault.run(type(uint256).max);
     }
 
     function test_descriptionReflectsState() public {
         console.log(vault.description());
         _sweepIntoVault();
-        vault.run(1);
+        vault.run(0);
         console.log(vault.description());
     }
 }

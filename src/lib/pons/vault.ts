@@ -88,18 +88,13 @@ export function vaultLauncherAddress(): `0x${string}` {
 /**
  * Starting values for the Buyback & Burn config.
  *
- * Price-check settings match the values exercised in the fork tests. They are
- * permanent once the vault exists, so they default rather than being asked for.
+ * `minHarvestEth` matches the keeper's own `KEEPER_MIN_WETH` floor on purpose.
+ * Both floors apply and the higher one decides, so defaulting below the keeper's
+ * would show creators a threshold that does not actually pace their vault.
  */
-/** Matches `MIN_MAX_TICK_DEVIATION` in `PonsBuybackBurnVault.sol`. */
-export const BUYBACK_MIN_MAX_TICK_DEVIATION = 50;
-
 export const BUYBACK_BURN_DEFAULTS = {
   burnPercent: '80',
-  cooldownHours: '1',
-  minHarvestEth: '0.005',
-  twapWindowSeconds: '300',
-  maxPriceSwingPercent: '2',
+  minHarvestEth: '0.025',
 } as const;
 
 /**
@@ -111,29 +106,11 @@ export const BUYBACK_BURN_DEFAULTS = {
  */
 export const STAKING_DEFAULTS = {
   lockDays: '0',
-  cooldownHours: '1',
-  minHarvestEth: '0.005',
+  minHarvestEth: '0.025',
 } as const;
 
 /** Longest lock the contract will accept, mirroring its MAX_LOCK_PERIOD. */
 export const STAKING_MAX_LOCK_DAYS = 365;
-
-/** Approximate price tolerance a tick deviation represents, for display. */
-export function tickDeviationToPercent(ticks: number): number {
-  return (Math.pow(1.0001, ticks) - 1) * 100;
-}
-
-/** Inverse of {tickDeviationToPercent}, for the launch form's percent input. */
-export function percentToTickDeviation(percent: number): number {
-  if (!Number.isFinite(percent) || percent <= 0) return 0;
-  return Math.round(Math.log(1 + percent / 100) / Math.log(1.0001));
-}
-
-export const BUYBACK_MIN_MAX_PRICE_SWING_PERCENT = tickDeviationToPercent(
-  BUYBACK_MIN_MAX_TICK_DEVIATION,
-);
-
-export const BUYBACK_MAX_MAX_PRICE_SWING_PERCENT = tickDeviationToPercent(5000);
 
 /* -------------------------------------------------------------------------- */
 /* abi                                                                        */
@@ -162,15 +139,11 @@ const VAULT_CONFIG_COMPONENTS = [
   { name: 'burnBps', type: 'uint16' },
   { name: 'treasury', type: 'address' },
   { name: 'minHarvestWei', type: 'uint256' },
-  { name: 'cooldown', type: 'uint32' },
-  { name: 'twapWindow', type: 'uint32' },
-  { name: 'maxTickDeviation', type: 'int24' },
 ] as const;
 
 const STAKING_CONFIG_COMPONENTS = [
   { name: 'lockPeriod', type: 'uint32' },
   { name: 'minHarvestWei', type: 'uint256' },
-  { name: 'cooldown', type: 'uint32' },
 ] as const;
 
 /**
@@ -252,9 +225,6 @@ export interface VaultConfigArgs {
   burnBps: number;
   treasury: `0x${string}`;
   minHarvestWei: bigint;
-  cooldown: number;
-  twapWindow: number;
-  maxTickDeviation: number;
 }
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000' as const;
@@ -268,33 +238,30 @@ export function buildVaultConfig(input: LaunchFormInput): VaultConfigArgs {
     // The contract only requires a treasury when something is left over.
     treasury: fullBurn ? ZERO_ADDRESS : (getAddress(input.vaultTreasury.trim()) as `0x${string}`),
     minHarvestWei: parseEther(input.vaultMinHarvestEth.trim() || '0'),
-    cooldown: Math.round(Number(input.vaultCooldownHours) * 3600),
-    twapWindow: Math.round(Number(input.vaultTwapWindowSeconds)),
-    maxTickDeviation: percentToTickDeviation(Number(input.vaultMaxPriceSwingPercent)),
   };
 }
 
 export interface StakingConfigArgs {
   lockPeriod: number;
   minHarvestWei: bigint;
-  cooldown: number;
 }
 
 export function buildStakingConfig(input: LaunchFormInput): StakingConfigArgs {
   return {
     lockPeriod: Math.round(Number(input.vaultStakingLockDays || '0') * 86_400),
     minHarvestWei: parseEther(input.vaultMinHarvestEth.trim() || '0'),
-    cooldown: Math.round(Number(input.vaultCooldownHours) * 3600),
   };
 }
 
-/** Harvest pacing, which every template configures the same way. */
+/**
+ * Harvest pacing, which every template configures the same way.
+ *
+ * The harvest floor is the whole of it. A run spends everything the vault
+ * holds, so it cannot repeat until trading refills it past this — which paces
+ * the vault by volume rather than by a clock, and is why there is no cooldown
+ * to validate here.
+ */
 function validateSharedVaultInput(input: LaunchFormInput): string | null {
-  const cooldownHours = Number(input.vaultCooldownHours);
-  if (!Number.isFinite(cooldownHours) || cooldownHours < 0) {
-    return 'Cooldown must be zero or positive.';
-  }
-
   const minHarvest = input.vaultMinHarvestEth.trim();
   if (minHarvest) {
     try {
@@ -343,20 +310,6 @@ export function validateVaultInput(input: LaunchFormInput): string | null {
   const burnBps = Math.round(burnPercent * 100);
   if (burnBps !== 10_000 && !isAddress(input.vaultTreasury.trim(), { strict: false })) {
     return 'Enter a treasury address, or set the burn share to 100%.';
-  }
-
-  const twapWindow = Number(input.vaultTwapWindowSeconds);
-  if (!Number.isFinite(twapWindow) || twapWindow < 60) {
-    return 'Price check window must be at least 60 seconds.';
-  }
-
-  const priceSwing = Number(input.vaultMaxPriceSwingPercent);
-  if (
-    !Number.isFinite(priceSwing) ||
-    priceSwing < BUYBACK_MIN_MAX_PRICE_SWING_PERCENT ||
-    priceSwing > BUYBACK_MAX_MAX_PRICE_SWING_PERCENT
-  ) {
-    return `Max price swing must be between about ${BUYBACK_MIN_MAX_PRICE_SWING_PERCENT.toFixed(1)}% and ${Math.round(BUYBACK_MAX_MAX_PRICE_SWING_PERCENT)}%.`;
   }
 
   return null;

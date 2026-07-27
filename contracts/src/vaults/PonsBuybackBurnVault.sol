@@ -14,37 +14,34 @@ import {PonsVaultBase} from "./PonsVaultBase.sol";
 ///
 /// @dev Distribution is permissionless: anyone may call {run}, and the vault itself is the
 ///      authorised fee claimant on the locker. That keeps the incentive-sensitive parameters
-///      (split, cooldown, slippage bounds) fixed at configuration time rather than under an
-///      operator's control, so no privileged party can time or shape the buyback.
+///      (split and harvest floor) fixed at configuration time rather than under an operator's
+///      control, so no privileged party can time or shape the buyback.
+///
+///      Pacing comes from `minHarvestWei` alone rather than a timer. A run spends the entire idle
+///      balance, so it cannot repeat until trading has refilled the vault past the floor — which
+///      makes the frequency track volume instead of the clock, and leaves nothing to spam.
+///
+///      The buyback carries no price check of its own. Because {run} is open to anyone, a caller who
+///      wants protection has to supply `amountOutMinimum`; passing zero accepts whatever the pool
+///      gives at that instant, including a price someone moved on purpose in the same block.
 contract PonsBuybackBurnVault is PonsVaultBase {
     using SafeERC20 for IERC20;
 
     error InvalidBurnBps(uint16 burnBps);
-    error InvalidTwapWindow();
-    error InvalidTickDeviation();
     error TreasuryRequired();
 
-    /// @dev Floor on `maxTickDeviation`. A value of one tick is ~0.01% and will reject almost
-    ///      every run on a thin pool, stranding fees forever with no way to recover them.
-    ///      Fifty ticks is ~0.5% — still tight, but not self-defeating.
-    int24 private constant MIN_MAX_TICK_DEVIATION = 50;
-
     event TreasuryPaid(address indexed treasury, uint256 amount);
-    event Configured(uint16 burnBps, address treasury, uint256 minHarvestWei, uint32 cooldown);
+    event Configured(uint16 burnBps, address treasury, uint256 minHarvestWei);
 
     /// @param burnBps Share of harvested WETH spent on buyback-and-burn, in basis points.
     /// @param treasury Recipient of the remaining WETH. Required unless `burnBps` is 10000.
-    /// @param minHarvestWei Minimum idle WETH required before {run} will act.
-    /// @param cooldown Minimum seconds between successful runs.
-    /// @param twapWindow TWAP window, in seconds, used for the price-manipulation guard.
-    /// @param maxTickDeviation Maximum absolute tick gap tolerated between spot and TWAP.
+    /// @param minHarvestWei Minimum idle WETH required before {run} will act. This is the only
+    ///        pacing control: a run spends the whole balance, so the next one cannot happen until
+    ///        trading has accrued this much again.
     struct Config {
         uint16 burnBps;
         address treasury;
         uint256 minHarvestWei;
-        uint32 cooldown;
-        uint32 twapWindow;
-        int24 maxTickDeviation;
     }
 
     Config public config;
@@ -63,22 +60,17 @@ contract PonsBuybackBurnVault is PonsVaultBase {
         __PonsVaultBase_init(_token, _locker, _collector);
         _validate(_config);
         config = _config;
-        emit Configured(_config.burnBps, _config.treasury, _config.minHarvestWei, _config.cooldown);
+        emit Configured(_config.burnBps, _config.treasury, _config.minHarvestWei);
     }
 
     /// @notice Harvest creator fees, buy back and burn the configured share, and forward the rest.
-    /// @dev Permissionless. `amountOutMinimum` is the caller's own slippage floor; it may be zero
-    ///      when the pool oracle has enough history for the TWAP guard to protect the swap, and is
-    ///      mandatory otherwise.
-    /// @param amountOutMinimum Minimum tokens the buyback swap must return.
+    /// @dev Permissionless. `amountOutMinimum` is the caller's own slippage floor and the only
+    ///      protection the swap has; zero means accept any fill.
+    /// @param amountOutMinimum Minimum tokens the buyback swap must return. Zero to accept any.
     /// @return wethSpent WETH spent on the buyback.
     /// @return tokensBurned Tokens sent to the burn address, including harvested token-side fees.
     function run(uint256 amountOutMinimum) external nonReentrant returns (uint256 wethSpent, uint256 tokensBurned) {
         Config memory cfg = config;
-
-        uint256 readyAt = lastRunAt + cfg.cooldown;
-        // forge-lint: disable-next-line(block-timestamp)
-        if (lastRunAt != 0 && block.timestamp < readyAt) revert CooldownActive(readyAt);
 
         _harvest();
 
@@ -92,7 +84,6 @@ contract PonsBuybackBurnVault is PonsVaultBase {
         uint256 treasuryAmount = wethBalance - wethSpent;
 
         if (wethSpent != 0) {
-            _requireFairPrice(cfg.twapWindow, cfg.maxTickDeviation, amountOutMinimum);
             _buyback(wethSpent, amountOutMinimum);
         }
 
@@ -109,10 +100,6 @@ contract PonsBuybackBurnVault is PonsVaultBase {
     function canRun() external view returns (bool ready, string memory reason) {
         Config memory cfg = config;
 
-        // forge-lint: disable-next-line(block-timestamp)
-        if (lastRunAt != 0 && block.timestamp < lastRunAt + cfg.cooldown) {
-            return (false, "Cooldown active");
-        }
         (uint256 wethBalance,) = idleBalances();
         if (wethBalance < cfg.minHarvestWei || wethBalance == 0) {
             return (false, "Insufficient accrued fees (harvest may still be pending in the locker)");
@@ -155,9 +142,5 @@ contract PonsBuybackBurnVault is PonsVaultBase {
     function _validate(Config calldata cfg) private pure {
         if (cfg.burnBps == 0 || cfg.burnBps > PonsAddresses.BPS_DENOMINATOR) revert InvalidBurnBps(cfg.burnBps);
         if (cfg.burnBps != PonsAddresses.BPS_DENOMINATOR && cfg.treasury == address(0)) revert TreasuryRequired();
-        if (cfg.twapWindow < 60) revert InvalidTwapWindow();
-        if (cfg.maxTickDeviation < MIN_MAX_TICK_DEVIATION || cfg.maxTickDeviation > 5000) {
-            revert InvalidTickDeviation();
-        }
     }
 }

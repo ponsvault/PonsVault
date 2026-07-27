@@ -13,9 +13,6 @@ export const PONS_VAULT_ABI = [
       { name: 'burnBps', type: 'uint16' },
       { name: 'treasury', type: 'address' },
       { name: 'minHarvestWei', type: 'uint256' },
-      { name: 'cooldown', type: 'uint32' },
-      { name: 'twapWindow', type: 'uint32' },
-      { name: 'maxTickDeviation', type: 'int24' },
     ],
   },
   {
@@ -38,13 +35,6 @@ export const PONS_VAULT_ABI = [
       { name: 'tokenBalance', type: 'uint256' },
     ],
   },
-  {
-    type: 'function',
-    name: 'isOracleReady',
-    stateMutability: 'view',
-    inputs: [{ name: 'window', type: 'uint32' }],
-    outputs: [{ name: 'ready', type: 'bool' }],
-  },
   { type: 'function', name: 'description', stateMutability: 'view', inputs: [], outputs: [{ type: 'string' }] },
   { type: 'function', name: 'totalWethHarvested', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
   { type: 'function', name: 'totalTokensBurned', stateMutability: 'view', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -61,13 +51,6 @@ export const PONS_VAULT_ABI = [
       { name: 'tokensBurned', type: 'uint256' },
     ],
   },
-  {
-    type: 'function',
-    name: 'primeOracle',
-    stateMutability: 'nonpayable',
-    inputs: [{ name: 'observationCardinalityNext', type: 'uint16' }],
-    outputs: [],
-  },
   { type: 'function', name: 'pool', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
   { type: 'function', name: 'template', stateMutability: 'pure', inputs: [], outputs: [{ type: 'string' }] },
 ] as const;
@@ -82,7 +65,6 @@ export const PONS_STAKING_VAULT_ABI = [
     outputs: [
       { name: 'lockPeriod', type: 'uint32' },
       { name: 'minHarvestWei', type: 'uint256' },
-      { name: 'cooldown', type: 'uint32' },
     ],
   },
   {
@@ -160,38 +142,10 @@ export const PONS_STAKING_VAULT_ABI = [
   { type: 'function', name: 'template', stateMutability: 'pure', inputs: [], outputs: [{ type: 'string' }] },
 ] as const;
 
-/** Just enough of the V3 pool to see how much oracle history it can hold. */
-const POOL_SLOT0_ABI = [
-  {
-    type: 'function',
-    name: 'slot0',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [
-      { name: 'sqrtPriceX96', type: 'uint160' },
-      { name: 'tick', type: 'int24' },
-      { name: 'observationIndex', type: 'uint16' },
-      { name: 'observationCardinality', type: 'uint16' },
-      { name: 'observationCardinalityNext', type: 'uint16' },
-      { name: 'feeProtocol', type: 'uint8' },
-      { name: 'unlocked', type: 'bool' },
-    ],
-  },
-] as const;
-
-/**
- * Observation slots requested when priming a pool's oracle.
- *
- * pons pools start at cardinality 1, which cannot serve a TWAP. The buffer then
- * fills as trades land in distinct blocks.
- */
-export const ORACLE_CARDINALITY_TARGET = 64;
-
 /** Everything every template has, whatever it does with the fees. */
 interface VaultStateBase {
   vault: Address;
   minHarvestWei: bigint;
-  cooldown: number;
   /** Fees sitting in the vault that have not been acted on yet. */
   pendingWeth: bigint;
   pendingToken: bigint;
@@ -205,22 +159,9 @@ export interface BuybackVaultState extends VaultStateBase {
   template: 'buyback-burn';
   burnBps: number;
   treasury: Address;
-  twapWindow: number;
-  maxTickDeviation: number;
   totalWethHarvested: bigint;
   totalTokensBurned: bigint;
   totalTreasuryPaid: bigint;
-  /** The TWAP can be read over the configured window right now. */
-  oracleReady: boolean;
-  /**
-   * The pool has been asked to keep more than one observation.
-   *
-   * Priming and readiness are different things: priming only allocates the
-   * buffer, which then fills as trades land in later blocks. Without this, a
-   * primed-but-still-filling oracle is indistinguishable from an unprimed one
-   * and the UI keeps asking to prime a pool that is already primed.
-   */
-  oraclePrimed: boolean;
 }
 
 export interface StakingVaultState extends VaultStateBase {
@@ -322,7 +263,6 @@ async function fetchStakingVaultState(
     vault,
     lockPeriod: Number(config[0]),
     minHarvestWei: config[1],
-    cooldown: Number(config[2]),
     pendingWeth: idle[0],
     pendingToken: idle[1],
     totalStaked,
@@ -361,32 +301,12 @@ async function fetchBuybackVaultState(
     client.readContract({ ...base, functionName: 'lastRunAt' }),
   ]);
 
-  const twapWindow = Number(config[4]);
-
-  // Both depend on values read above, so they cannot join the batch.
-  const [oracleReady, pool] = await Promise.all([
-    client.readContract({ ...base, functionName: 'isOracleReady', args: [config[4]] }),
-    client.readContract({ ...base, functionName: 'pool' }),
-  ]);
-
-  let oraclePrimed = false;
-  if (pool && pool !== ZERO_ADDRESS) {
-    const slot0 = await client
-      .readContract({ address: pool, abi: POOL_SLOT0_ABI, functionName: 'slot0' })
-      .catch(() => null);
-    // Cardinality 1 holds only the latest observation, so no window can be read.
-    if (slot0) oraclePrimed = slot0[4] > 1;
-  }
-
   return {
     template: 'buyback-burn',
     vault,
     burnBps: Number(config[0]),
     treasury: config[1],
     minHarvestWei: config[2],
-    cooldown: Number(config[3]),
-    twapWindow,
-    maxTickDeviation: Number(config[5]),
     pendingWeth: idle[0],
     pendingToken: idle[1],
     totalWethHarvested,
@@ -396,16 +316,7 @@ async function fetchBuybackVaultState(
     lastRunAt,
     canRun: canRunResult[0],
     canRunReason: canRunResult[1],
-    oracleReady,
-    oraclePrimed,
   };
-}
-
-/** Seconds remaining before the cooldown expires, or 0 when it already has. */
-export function cooldownRemaining(state: VaultState, nowSeconds: number): number {
-  if (state.lastRunAt === 0n) return 0;
-  const readyAt = Number(state.lastRunAt) + state.cooldown;
-  return Math.max(0, readyAt - nowSeconds);
 }
 
 export function formatDuration(seconds: number): string {

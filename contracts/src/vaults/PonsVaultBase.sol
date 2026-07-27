@@ -8,11 +8,11 @@ import {ReentrancyGuardUpgradeable} from "@openzeppelin-contracts-upgradeable/se
 
 import {PonsAddresses} from "../PonsAddresses.sol";
 import {IPonsFeeCollector} from "../interfaces/IPonsLaunchpad.sol";
-import {ISwapRouter02, IUniswapV3Factory, IUniswapV3Pool} from "../interfaces/IUniswapV3.sol";
+import {ISwapRouter02, IUniswapV3Factory} from "../interfaces/IUniswapV3.sol";
 
 /// @title PonsVaultBase
-/// @notice Shared plumbing for PonsVault templates: claiming pons creator fees, price-manipulation
-///         guards, and buyback/burn primitives.
+/// @notice Shared plumbing for PonsVault templates: claiming pons creator fees and buyback/burn
+///         primitives.
 ///
 /// @dev How a PonsVault earns: pons routes a launch's creator LP fees to `feeRedirects(token)` on
 ///      the locker, so pointing that at a vault makes the vault the payout recipient.
@@ -29,11 +29,7 @@ abstract contract PonsVaultBase is Initializable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     error ZeroAddress();
-    error PoolNotFound();
     error NothingToHarvest();
-    error CooldownActive(uint256 readyAt);
-    error PriceOutOfRange(int24 spotTick, int24 twapTick, int24 maxDeviation);
-    error OracleNotReady();
 
     event FeesHarvested(uint256 wethAmount, uint256 tokenAmount);
     event BuybackExecuted(uint256 wethSpent, uint256 tokensBought);
@@ -75,23 +71,6 @@ abstract contract PonsVaultBase is Initializable, ReentrancyGuardUpgradeable {
             IUniswapV3Factory(PonsAddresses.V3_FACTORY).getPool(PonsAddresses.WETH, token, PonsAddresses.POOL_FEE);
     }
 
-    /// @notice Grow the pool's oracle ring buffer so TWAP checks become available.
-    /// @dev Permissionless and idempotent. pons pools start at cardinality 1, which is not enough
-    ///      history for a TWAP, so this needs calling once per pool. The buffer then fills as
-    ///      trades land in distinct blocks.
-    function primeOracle(uint16 observationCardinalityNext) external {
-        address poolAddress = pool();
-        if (poolAddress == address(0)) revert PoolNotFound();
-        IUniswapV3Pool(poolAddress).increaseObservationCardinalityNext(observationCardinalityNext);
-    }
-
-    /// @notice Whether a TWAP over `window` seconds can currently be read from the pool.
-    function isOracleReady(uint32 window) public view returns (bool ready) {
-        address poolAddress = pool();
-        if (poolAddress == address(0)) return false;
-        (, ready) = _twapTick(poolAddress, window);
-    }
-
     /// @notice Balances currently sitting in the vault, awaiting distribution.
     function idleBalances() public view returns (uint256 wethBalance, uint256 tokenBalance) {
         wethBalance = IERC20(PonsAddresses.WETH).balanceOf(address(this));
@@ -127,31 +106,6 @@ abstract contract PonsVaultBase is Initializable, ReentrancyGuardUpgradeable {
         emit FeesHarvested(wethGained, tokenGained);
     }
 
-    /// @dev Reverts unless the pool's spot price sits within `maxTickDeviation` of its TWAP.
-    ///      This is the sandwich guard: because distribution is permissionless, an attacker could
-    ///      otherwise move the pool, trigger a buyback into the skewed price, and unwind. Bounding
-    ///      the deviation bounds the extractable value.
-    ///
-    ///      When the oracle has insufficient history the caller must supply an explicit
-    ///      `amountOutMinimum` instead, so the swap is still protected.
-    function _requireFairPrice(uint32 window, int24 maxTickDeviation, uint256 amountOutMinimum) internal view {
-        address poolAddress = pool();
-        if (poolAddress == address(0)) revert PoolNotFound();
-
-        (int24 twapTick, bool ok) = _twapTick(poolAddress, window);
-        if (!ok) {
-            if (amountOutMinimum == 0) revert OracleNotReady();
-            return;
-        }
-
-        (, int24 spotTick,,,,,) = IUniswapV3Pool(poolAddress).slot0();
-        int256 deviation = int256(spotTick) - int256(twapTick);
-        if (deviation < 0) deviation = -deviation;
-        if (deviation > int256(maxTickDeviation)) {
-            revert PriceOutOfRange(spotTick, twapTick, maxTickDeviation);
-        }
-    }
-
     /// @dev Spends `wethAmount` buying the token into this vault.
     ///      The swap must deliver to the vault rather than straight to the burn address: pons tokens
     ///      reject a pool transfer whose recipient is the burn address (Uniswap surfaces this as
@@ -185,30 +139,6 @@ abstract contract PonsVaultBase is Initializable, ReentrancyGuardUpgradeable {
         IERC20(token).safeTransfer(PonsAddresses.BURN_ADDRESS, burned);
         totalTokensBurned += burned;
         emit TokensBurned(burned);
-    }
-
-    function _twapTick(address poolAddress, uint32 window) private view returns (int24 tick, bool ok) {
-        if (window == 0) return (0, false);
-
-        uint32[] memory secondsAgos = new uint32[](2);
-        secondsAgos[0] = window;
-        secondsAgos[1] = 0;
-
-        try IUniswapV3Pool(poolAddress).observe(secondsAgos) returns (
-            int56[] memory tickCumulatives, uint160[] memory
-        ) {
-            int56 delta = tickCumulatives[1] - tickCumulatives[0];
-            int56 windowInt = int56(uint56(window));
-            int56 averaged = delta / windowInt;
-            if (delta < 0 && delta % windowInt != 0) averaged--;
-            // An average of observed ticks stays within Uniswap's [MIN_TICK, MAX_TICK] range,
-            // which fits in int24 by construction.
-            // forge-lint: disable-next-line(unsafe-typecast)
-            tick = int24(averaged);
-            ok = true;
-        } catch {
-            ok = false;
-        }
     }
 
     uint256[45] private __gap;

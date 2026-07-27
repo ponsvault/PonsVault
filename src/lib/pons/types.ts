@@ -161,15 +161,11 @@ export interface LaunchFormInput {
   devBuyEth: string;
   /** Which vault template to attach, or 'none' to keep fees in your wallet. */
   vaultTemplate: VaultTemplateId;
-  /** Shared by every template. */
-  vaultCooldownHours: string;
+  /** Shared by every template, and the only thing pacing a vault. */
   vaultMinHarvestEth: string;
   /** Buyback & Burn only. */
   vaultBurnPercent: string;
   vaultTreasury: string;
-  vaultTwapWindowSeconds: string;
-  /** How far the live price may sit from the average before a buyback skips, in percent. */
-  vaultMaxPriceSwingPercent: string;
   /** Staking only. Days a stake is locked, counted from the staker's deposit. */
   vaultStakingLockDays: string;
 }

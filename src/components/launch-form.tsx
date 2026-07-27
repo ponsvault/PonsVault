@@ -75,10 +75,7 @@ const emptyForm: LaunchFormInput = {
   vaultTemplate: vaultsAvailable ? 'buyback-burn' : 'none',
   vaultBurnPercent: BUYBACK_BURN_DEFAULTS.burnPercent,
   vaultTreasury: '',
-  vaultCooldownHours: BUYBACK_BURN_DEFAULTS.cooldownHours,
   vaultMinHarvestEth: BUYBACK_BURN_DEFAULTS.minHarvestEth,
-  vaultTwapWindowSeconds: BUYBACK_BURN_DEFAULTS.twapWindowSeconds,
-  vaultMaxPriceSwingPercent: BUYBACK_BURN_DEFAULTS.maxPriceSwingPercent,
   vaultStakingLockDays: STAKING_DEFAULTS.lockDays,
 };
 
@@ -649,25 +646,11 @@ export function LaunchForm() {
                 {vaultAdvancedOpen ? (
                   <div className="launchpad-advanced">
                     <p className="launchpad-field-note">
-                      These stop someone from pushing the price right before the vault buys. The
-                      defaults are what we test with — they cannot be changed after launch.
+                      The default is what we test with, and like everything else here it is fixed
+                      once the vault exists.
                     </p>
-                    <div className="vault-config-row">
-                      <label className="launchpad-field">
-                        <span className="launchpad-label">Wait between runs (hours)</span>
-                        <input
-                          className="launchpad-input"
-                          inputMode="decimal"
-                          value={form.vaultCooldownHours}
-                          onChange={(e) =>
-                            setForm((f) => ({ ...f, vaultCooldownHours: e.target.value }))
-                          }
-                        />
-                        <p className="launchpad-field-note">
-                          Shortest gap before the vault can buy again.
-                        </p>
-                      </label>
 
+                    <div className="vault-config-row">
                       <label className="launchpad-field">
                         <span className="launchpad-label">Minimum fees before a run (ETH)</span>
                         <input
@@ -679,48 +662,12 @@ export function LaunchForm() {
                           }
                         />
                         <p className="launchpad-field-note">
-                          Waits until at least this much has built up, so runs are worth the gas.
-                        </p>
-                      </label>
-
-                      <label className="launchpad-field">
-                        <span className="launchpad-label">Price check window (seconds)</span>
-                        <input
-                          className="launchpad-input"
-                          inputMode="numeric"
-                          value={form.vaultTwapWindowSeconds}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              vaultTwapWindowSeconds: e.target.value,
-                            }))
-                          }
-                        />
-                        <p className="launchpad-field-note">
-                          How long to average the price before checking it. Default 300 = 5 minutes.
-                          At least 60.
-                        </p>
-                      </label>
-
-                      <label className="launchpad-field">
-                        <span className="launchpad-label">Max price swing (%)</span>
-                        <input
-                          className="launchpad-input"
-                          inputMode="decimal"
-                          value={form.vaultMaxPriceSwingPercent}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              vaultMaxPriceSwingPercent: e.target.value,
-                            }))
-                          }
-                        />
-                        <p className="launchpad-field-note">
-                          Skips the buy if the live price is farther than this from the average.
-                          Default 2%. At least 0.5%.
+                          The vault waits until this much has built up, then buys. Set it higher and
+                          it buys less often in bigger amounts.
                         </p>
                       </label>
                     </div>
+
                   </div>
                 ) : null}
               </div>
@@ -763,21 +710,9 @@ export function LaunchForm() {
                     }
                   />
                   <p className="launchpad-field-note">
-                    Lets fees build up instead of paying out dust.
+                    The vault waits until this much has built up, then pays out. Set it higher and
+                    stakers are paid less often in bigger amounts.
                   </p>
-                </label>
-
-                <label className="launchpad-field">
-                  <span className="launchpad-label">Wait between payouts (hours)</span>
-                  <input
-                    className="launchpad-input"
-                    inputMode="decimal"
-                    value={form.vaultCooldownHours}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, vaultCooldownHours: e.target.value }))
-                    }
-                  />
-                  <p className="launchpad-field-note">Minimum gap between payouts.</p>
                 </label>
               </div>
             </div>

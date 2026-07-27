@@ -59,14 +59,7 @@ contract PonsVaultLauncherForkTest is Test {
     }
 
     function _config() internal view returns (PonsBuybackBurnVault.Config memory) {
-        return PonsBuybackBurnVault.Config({
-            burnBps: 10_000,
-            treasury: treasury,
-            minHarvestWei: 1,
-            cooldown: 30 minutes,
-            twapWindow: 300,
-            maxTickDeviation: 500
-        });
+        return PonsBuybackBurnVault.Config({burnBps: 10_000, treasury: treasury, minHarvestWei: 1});
     }
 
     function test_launchWiresVaultToCreatorFees() public {
@@ -123,7 +116,7 @@ contract PonsVaultLauncherForkTest is Test {
 
         // No privileged caller anywhere in this flow.
         vm.prank(makeAddr("randomKeeper"));
-        (uint256 wethSpent, uint256 tokensBurned) = vault.run(1);
+        (uint256 wethSpent, uint256 tokensBurned) = vault.run(0);
 
         console.log("weth harvested :", vault.totalWethHarvested());
         console.log("weth spent     :", wethSpent);
@@ -193,7 +186,7 @@ contract PonsVaultLauncherForkTest is Test {
             0,
             keccak256("pons-vault-salt-8"),
             newTemplate,
-            abi.encode(PonsStakingVault.Config({lockPeriod: 0, minHarvestWei: 1, cooldown: 30 minutes}))
+            abi.encode(PonsStakingVault.Config({lockPeriod: 0, minHarvestWei: 1}))
         );
 
         assertEq(address(launcher), launcherBefore, "launcher address unchanged");

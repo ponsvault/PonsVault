@@ -1,7 +1,6 @@
 import { formatEther } from 'viem';
 
 import { PONS_TOTAL_SUPPLY } from './constants';
-import { formatDuration } from './vault-state';
 
 /** Wei strings arrive from the API; a malformed one should read as zero, not throw. */
 export function toBigInt(value: string | null | undefined): bigint {
@@ -34,18 +33,13 @@ export function supplyPercent(value: bigint): number {
 /**
  * How often a vault can act, in the creator's own configured terms.
  *
- * Both limits exist so a vault cannot be spammed into spending its fees on gas,
- * so they are stated together rather than as two opaque parameters.
+ * There is no clock in the answer because there is none in the contract: a run
+ * spends the whole balance, so the floor alone decides how often one can
+ * happen. Busy tokens act often, quiet ones rarely, and neither needs a timer.
  */
-export function describeCadence(state: { cooldown: number; minHarvestWei: bigint }): string {
-  const parts: string[] = [];
-  parts.push(
-    state.cooldown > 0
-      ? `at most once every ${formatDuration(state.cooldown)}`
-      : 'no enforced wait between runs',
-  );
-  if (state.minHarvestWei > 0n) {
-    parts.push(`once at least ${formatWeth(state.minHarvestWei)} WETH has accrued`);
+export function describeCadence(state: { minHarvestWei: bigint }): string {
+  if (state.minHarvestWei === 0n) {
+    return 'whenever any fees have accrued';
   }
-  return parts.join(', ');
+  return `each time ${formatWeth(state.minHarvestWei)} WETH accrues`;
 }
