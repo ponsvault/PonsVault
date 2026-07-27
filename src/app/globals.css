@@ -1218,6 +1218,35 @@ label.launchpad-field-note {
   color: var(--text-muted);
 }
 
+.token-creator-fees-vault-share {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(212, 252, 80, 0.18);
+  background: rgba(212, 252, 80, 0.04);
+}
+
+.token-creator-fees-vault-share-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.token-creator-fees-vault-share-tag {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.token-creator-fees-card.is-vault-share {
+  border-color: rgba(212, 252, 80, 0.14);
+  background: rgba(0, 0, 0, 0.18);
+}
+
 .token-creator-fees-meta {
   display: grid;
   gap: 10px;

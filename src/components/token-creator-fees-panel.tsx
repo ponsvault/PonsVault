@@ -24,6 +24,12 @@ interface TokenCreatorFeesPanelProps {
   onClaimed: () => void;
 }
 
+function usdFromWei(raw: string, priceUsd: number): number {
+  const amount = Number(formatEther(BigInt(raw)));
+  if (!Number.isFinite(amount) || amount <= 0) return 0;
+  return amount * priceUsd;
+}
+
 export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreatorFeesPanelProps) {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -41,30 +47,27 @@ export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreator
   const rewards = detail.fees.creatorRewards;
   const deployer = detail.launch?.deployer as Address | undefined;
   const locker = detail.fees.locker as Address | null;
+  const vaultOwnsFees = Boolean(vaultState);
 
   const canClaim = useMemo(() => {
-    if (!deployer || !locker || !rewards) return false;
+    if (!deployer || !locker || !rewards || vaultOwnsFees) return false;
     return isCreatorFeeClaimant(
       address,
       deployer,
       rewards.payoutAddress as Address,
       detail.fees.feeRedirect as Address | null,
     );
-  }, [address, deployer, detail.fees.feeRedirect, locker, rewards]);
+  }, [address, deployer, detail.fees.feeRedirect, locker, rewards, vaultOwnsFees]);
 
-  const grossTokenUsd = useMemo(() => {
+  const amounts = useMemo(() => {
     if (!rewards) return null;
-    const tokens = Number(formatEther(BigInt(rewards.grossToken)));
-    if (!Number.isFinite(tokens) || tokens <= 0) return 0;
-    return tokens * detail.market.priceUsd;
-  }, [detail.market.priceUsd, rewards]);
-
-  const grossWethUsd = useMemo(() => {
-    if (!rewards) return null;
-    const weth = Number(formatEther(BigInt(rewards.grossWeth)));
-    if (!Number.isFinite(weth) || weth <= 0) return 0;
-    return weth * detail.market.ethUsd;
-  }, [detail.market.ethUsd, rewards]);
+    return {
+      grossTokenUsd: usdFromWei(rewards.grossToken, detail.market.priceUsd),
+      grossWethUsd: usdFromWei(rewards.grossWeth, detail.market.ethUsd),
+      vaultTokenUsd: usdFromWei(rewards.creatorToken, detail.market.priceUsd),
+      vaultWethUsd: usdFromWei(rewards.creatorWeth, detail.market.ethUsd),
+    };
+  }, [detail.market.ethUsd, detail.market.priceUsd, rewards]);
 
   const claimMutation = useMutation({
     mutationFn: async () => {
@@ -97,13 +100,13 @@ export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreator
     },
   });
 
-  if (!rewards) {
+  if (!rewards || !amounts) {
     return (
       <section className="token-creator-fees">
         <header className="token-creator-fees-header">
           <Coins className="h-5 w-5 text-lime-300" />
           <div>
-            <h2>Creator fees</h2>
+            <h2>Pool fees</h2>
             <p>Pool fees accrue without unlocking the permanent liquidity position.</p>
           </div>
         </header>
@@ -114,29 +117,59 @@ export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreator
 
   const splitLabel = `${detail.fees.creatorSharePercent}% creator / ${detail.fees.protocolSharePercent}% protocol`;
   const claimable = hasClaimableCreatorFees(rewards);
+  const symbol = detail.metadata.symbol;
+  const vaultVerb =
+    vaultState?.template === 'staking' ? 'pays out to stakers' : 'buys and burns';
 
   return (
     <section className="token-creator-fees">
       <header className="token-creator-fees-header">
         <Coins className="h-5 w-5 text-lime-300" />
         <div>
-          <h2>Creator fees</h2>
-          <p>Pool fees accrue without unlocking the permanent liquidity position.</p>
+          <h2>{vaultOwnsFees ? 'Pool fees' : 'Creator fees'}</h2>
+          <p>
+            {vaultOwnsFees
+              ? 'Full LP fees from the pool. The vault only receives the creator share.'
+              : 'Pool fees accrue without unlocking the permanent liquidity position.'}
+          </p>
         </div>
       </header>
 
       <div className="token-creator-fees-grid">
         <div className="token-creator-fees-card">
-          <span>Accrued {detail.metadata.symbol}</span>
-          <strong>{formatAccruedTokenAmount(rewards.grossToken, detail.metadata.symbol)}</strong>
-          <small>{formatUsd(grossTokenUsd, 2)}</small>
+          <span>Gross {symbol}</span>
+          <strong>{formatAccruedTokenAmount(rewards.grossToken, symbol)}</strong>
+          <small>{formatUsd(amounts.grossTokenUsd, 2)}</small>
         </div>
         <div className="token-creator-fees-card">
-          <span>Accrued WETH</span>
+          <span>Gross WETH</span>
           <strong>{formatAccruedWethAmount(rewards.grossWeth)}</strong>
-          <small>{formatUsd(grossWethUsd, 2)}</small>
+          <small>{formatUsd(amounts.grossWethUsd, 2)}</small>
         </div>
       </div>
+
+      {vaultOwnsFees ? (
+        <div className="token-creator-fees-vault-share">
+          <div className="token-creator-fees-vault-share-head">
+            <span>Vault receives ({detail.fees.creatorSharePercent}%)</span>
+            <span className="token-creator-fees-vault-share-tag">
+              not the gross · what Queued above uses
+            </span>
+          </div>
+          <div className="token-creator-fees-grid">
+            <div className="token-creator-fees-card is-vault-share">
+              <span>{symbol} to vault</span>
+              <strong>{formatAccruedTokenAmount(rewards.creatorToken, symbol)}</strong>
+              <small>{formatUsd(amounts.vaultTokenUsd, 2)}</small>
+            </div>
+            <div className="token-creator-fees-card is-vault-share">
+              <span>WETH to vault</span>
+              <strong>{formatAccruedWethAmount(rewards.creatorWeth)}</strong>
+              <small>{formatUsd(amounts.vaultWethUsd, 2)}</small>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <dl className="token-creator-fees-meta">
         <div>
@@ -144,11 +177,12 @@ export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreator
           <dd>{splitLabel}</dd>
         </div>
         <div>
-          <dt>Payout wallet</dt>
+          <dt>{vaultOwnsFees ? 'Paid to' : 'Payout wallet'}</dt>
           <dd>
             <a href={explorerAddressUrl(rewards.payoutAddress)} target="_blank" rel="noreferrer">
               {shortAddress(rewards.payoutAddress, 6)}
             </a>
+            {vaultOwnsFees ? ' · vault' : null}
           </dd>
         </div>
       </dl>
@@ -172,12 +206,11 @@ export function TokenCreatorFeesPanel({ token, detail, onClaimed }: TokenCreator
             'Claim fees'
           )}
         </button>
-      ) : vaultState ? (
+      ) : vaultOwnsFees ? (
         <p className="token-creator-fees-note">
-          A vault owns these fees — there is nothing to claim. The figures above are gross; the{' '}
-          {detail.fees.creatorSharePercent}% creator share of them goes to the vault above, which{' '}
-          {vaultState.template === 'staking' ? 'pays it out to stakers' : 'buys and burns with it'}.
-          Anyone can trigger that.
+          Nothing to claim here. Protocol keeps {detail.fees.protocolSharePercent}%; the{' '}
+          {detail.fees.creatorSharePercent}% above is what the vault {vaultVerb}. Anyone can
+          trigger that from the vault panel.
         </p>
       ) : (
         <p className="token-creator-fees-note">

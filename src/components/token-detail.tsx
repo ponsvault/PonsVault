@@ -152,6 +152,7 @@ export function TokenDetail({ token }: TokenDetailProps) {
             symbol={data.metadata.symbol}
             pendingCreatorWeth={data.fees.creatorRewards?.creatorWeth ?? null}
             pendingCreatorToken={data.fees.creatorRewards?.creatorToken ?? null}
+            creatorSharePercent={data.fees.creatorSharePercent}
           />
 
           <TokenCreatorFeesPanel token={token} detail={data} onClaimed={() => refetch()} />

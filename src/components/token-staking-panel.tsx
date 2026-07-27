@@ -24,6 +24,8 @@ interface TokenStakingPanelProps {
   nowSeconds: number;
   /** What the next run will collect on top of what the vault already holds. */
   harvestable: bigint;
+  /** Creator cut of pool fees, e.g. 70. Used only for the queued label. */
+  creatorSharePercent?: number;
   onChanged: () => void;
 }
 
@@ -82,6 +84,7 @@ export function TokenStakingPanel({
   state,
   nowSeconds,
   harvestable,
+  creatorSharePercent = 70,
   onChanged,
 }: TokenStakingPanelProps) {
   const publicClient = usePublicClient();
@@ -419,6 +422,10 @@ export function TokenStakingPanel({
         <div className="token-vault-pending">
           <span className="token-vault-pending-label">Queued for the next payout</span>
           <span className="pv-mono token-vault-pending-value">{formatWeth(harvestable)} WETH</span>
+          <span className="token-vault-pending-scope">
+            Vault share only — the {creatorSharePercent}% creator cut. Pool fees below show the
+            full gross.
+          </span>
           <span className="token-vault-hint">{runAction.hint}</span>
         </div>
         <button
