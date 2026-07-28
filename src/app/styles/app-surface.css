@@ -214,6 +214,71 @@
   font-weight: var(--w-display);
 }
 
+/* --- rwa claim list ------------------------------------------------------ */
+
+.token-rwa-claims {
+  padding: 0;
+  margin: 0;
+  list-style: none;
+  border-bottom: 1px solid var(--hairline-strong);
+}
+
+/* One row per round, each its own decision, so the button sits on the same
+   line as the amount it pays rather than below a wall of them. */
+.token-rwa-claim {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.token-rwa-claim + .token-rwa-claim {
+  border-top: 1px solid var(--hairline);
+}
+
+.token-rwa-claim-lead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  margin-right: auto;
+}
+
+.token-rwa-claim-round {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+}
+
+.token-rwa-claim-amount {
+  font-size: 15px;
+  font-weight: var(--w-display);
+  letter-spacing: -0.01em;
+  color: var(--text-primary);
+  /* so amounts line up digit for digit down the column */
+  font-variant-numeric: tabular-nums;
+}
+
+/* A round that is settled or not yet allocated states why, in place of the
+   button, rather than showing a disabled one that invites a click. */
+.token-rwa-claim-state {
+  flex: none;
+  font-size: 12px;
+  color: var(--text-subtle);
+}
+
+@media (max-width: 560px) {
+  .token-rwa-claim {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .token-rwa-claim-state {
+    text-align: right;
+  }
+}
+
 .token-vault-body {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
