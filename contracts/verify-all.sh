@@ -14,6 +14,9 @@ LOCKER=0x736D76699C26D0d966744cAe304C000d471f7F35
 REGISTRY=0x770c1AA562f7DfA60934959585DaECf2d9AD32be
 BUYBACK_IMPL=0x0769730FaDaA0a1C96853f2115De68Ff5d3d2577
 STAKING_IMPL=0x7C1459C681F9E96bb66931387a05e3676410b4b3
+RWA_IMPL=0x724be4a7eb9d9500d1d95691Faf2713b0ac9Bda0
+# The keeper, set as the distributor for every vault this factory creates.
+RWA_DISTRIBUTOR=0x897ac30f73Ba92E1EFbC1dF1e67f8b5F4b3ECD2b
 
 # --skip-is-verified-check is not optional here. Blockscout shows a "verified twin" for any
 # address whose bytecode matches an already-verified one, so both beacons appear verified off
@@ -58,5 +61,15 @@ verify "PonsStakingVault (impl)" $STAKING_IMPL \
 
 verify "Staking beacon" 0xE63445734036E56c81353f77B7DdE2C49Cbfc770 "$BEACON" \
   --constructor-args "$(cast abi-encode 'constructor(address)' $STAKING_IMPL)"
+
+verify "RwaVaultFactory" 0xd015d819751671efCeBBba6A76e1Ad52465104C3 \
+  src/factories/PonsRwaVaultFactory.sol:PonsRwaVaultFactory \
+  --constructor-args "$(cast abi-encode 'constructor(address)' $RWA_DISTRIBUTOR)"
+
+verify "PonsRwaVault (impl)" $RWA_IMPL \
+  src/vaults/PonsRwaVault.sol:PonsRwaVault
+
+verify "Rwa beacon" 0xe6e5BAa743c9600Dbb1bd44c7266AA6D24769560 "$BEACON" \
+  --constructor-args "$(cast abi-encode 'constructor(address)' $RWA_IMPL)"
 
 echo "ALL DONE"
