@@ -28,6 +28,22 @@ interface TokenRwaPanelProps {
 }
 
 /**
+ * A share of a stock, at a length somebody can read.
+ *
+ * Dividing a round across every holder leaves amounts with all eighteen
+ * decimals populated, and printing them in full turns a figure into a string
+ * nobody can compare against another. The full value is still what gets sent.
+ */
+function formatAsset(amount: bigint | string, decimals: number): string {
+  const exact = formatUnits(BigInt(amount), decimals);
+  const [whole, fraction] = exact.split('.');
+  if (!fraction) return whole;
+
+  const trimmed = fraction.slice(0, 6).replace(/0+$/, '');
+  return trimmed ? `${whole}.${trimmed}` : whole;
+}
+
+/**
  * The holder's side of an RWA Dividend vault.
  *
  * Everything here is about one question — what is mine and can I take it — so
@@ -95,7 +111,7 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
 
       <div className="token-vault-headline">
         <div className="token-vault-headline-figure">
-          {formatUnits(owed, assetDecimals)} {assetSymbol}
+          {formatAsset(owed, assetDecimals)} {assetSymbol}
         </div>
         <p className="token-vault-headline-note">
           {isConnected
@@ -128,27 +144,40 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
       ) : null}
 
       {claims && claims.length > 0 ? (
-        <ol className="token-vault-steps">
-          {claims.map((row) => (
-            <li key={row.roundId}>
-              <span className="token-vault-step-n">{row.roundId + 1}</span>
-              <span>
-                {formatUnits(BigInt(row.amount), assetDecimals)} {assetSymbol}
-                {row.claimed ? ' · claimed' : row.rootPosted ? '' : ' · awaiting allocation'}
-              </span>
-              {row.claimable ? (
-                <button
-                  type="button"
-                  className="pv-button"
-                  disabled={claimMutation.isPending}
-                  onClick={() => claimMutation.mutate(row)}
-                >
-                  {claimMutation.isPending ? 'Claiming…' : 'Claim'}
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ol>
+        <ul className="token-rwa-claims">
+          {claims.map((row) => {
+            // Scoped to the row being sent, so pressing one round's button does
+            // not put every other row into a pending state it is not in.
+            const sending = claimMutation.isPending && claimMutation.variables?.roundId === row.roundId;
+
+            return (
+              <li key={row.roundId} className="token-rwa-claim">
+                <div className="token-rwa-claim-lead">
+                  <span className="token-rwa-claim-round">Round {row.roundId + 1}</span>
+                  <span className="token-rwa-claim-amount">
+                    {formatAsset(row.amount, assetDecimals)} {assetSymbol}
+                  </span>
+                </div>
+
+                {row.claimable ? (
+                  <button
+                    type="button"
+                    className="ui-btn ui-btn-primary token-vault-action"
+                    disabled={sending}
+                    onClick={() => claimMutation.mutate(row)}
+                  >
+                    {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    <span className="ui-btn-label">{sending ? 'Claiming…' : 'Claim'}</span>
+                  </button>
+                ) : (
+                  <span className="token-rwa-claim-state">
+                    {row.claimed ? 'Claimed' : 'Awaiting allocation'}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
 
       {claimMutation.error ? (
@@ -172,9 +201,11 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
               <dd className="token-vault-prose">{state.roundCount}</dd>
             </div>
             <div className="token-vault-row">
-              <dt>Waiting to be claimed</dt>
+              {/* Not the same as unclaimed: this is stock no round has a claim
+                  on, which the next run allocates. */}
+              <dt>Waiting for the next round</dt>
               <dd className="token-vault-prose">
-                {formatUnits(state.undistributedRwa, assetDecimals)} {assetSymbol}
+                {formatAsset(state.undistributedRwa, assetDecimals)} {assetSymbol}
               </dd>
             </div>
             <div className="token-vault-row">
