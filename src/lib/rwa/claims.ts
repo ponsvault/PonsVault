@@ -28,9 +28,10 @@ export interface RoundClaim {
  * Allocations already built, keyed by vault and round.
  *
  * Safe to keep indefinitely because a round is immutable in every input this
- * depends on: `total` and `snapshotBlock` are written when it opens and never
- * change, so the tree derived from them cannot either. Claiming moves
- * `claimed`, which is read separately and never cached.
+ * depends on: its `total` is written when it opens, and the block it is measured
+ * at is where its `RoundOpened` log sits — neither can change, so the tree
+ * derived from them cannot either. Claiming moves `claimed`, which is read
+ * separately and never cached.
  *
  * The promise is cached rather than the value, so concurrent requests for the
  * same round share one rebuild instead of starting several.
