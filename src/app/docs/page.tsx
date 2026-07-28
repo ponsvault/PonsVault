@@ -277,10 +277,25 @@ export default function DocsPage() {
               can trigger the draw.
             </p>
 
-            <h3>RWA Tax — in development</h3>
+            <h3>RWA Dividend</h3>
             <p>
-              ETH is reserved for tokenized-stock purchases. Keepers sell supported RWA assets to the
-              vault, and holders can claim RWA dividends.
+              Converts the creator fees into a tokenized stock, which the vault holds until holders
+              claim it. Holders earn by holding — there is nothing to stake and nothing to opt into.
+              The token side of the fees is burned, as with Buyback &amp; Burn.
+            </p>
+            <p>
+              Each purchase opens a round. Your share of a round is worked out from what you held at
+              the moment it opened, so buying in afterwards does not dilute anyone already there.
+              Rounds stay claimable for a fixed window; anything unclaimed after that rolls into the
+              next round rather than being stranded.
+            </p>
+            <p>
+              The stock is chosen from a short list — GameStop, NVIDIA and SpaceX — and fixed
+              forever at launch. The list is short because most tokenized stocks on this chain are
+              barely traded on-chain: their pools exist but hold almost nothing, so converting fees
+              into them would lose most of the value to price impact. Only assets with enough
+              liquidity to convert a round at a fair price are offered, and each one is re-checked
+              against the chain when you launch.
             </p>
           </Reveal>
 

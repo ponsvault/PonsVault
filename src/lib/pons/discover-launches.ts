@@ -18,7 +18,7 @@ export interface DiscoveredLaunch {
 
 function templateFromBytes32(id: Hex): VaultTemplateId {
   const raw = hexToString(trim(id, { dir: 'right' }));
-  if (raw === 'staking' || raw === 'lottery' || raw === 'rwa-tax' || raw === 'buyback-burn') {
+  if (raw === 'staking' || raw === 'lottery' || raw === 'rwa' || raw === 'buyback-burn') {
     return raw;
   }
   return 'buyback-burn';

@@ -1,21 +1,33 @@
--- The live check still only allowed an older template set. Schema.sql already
--- lists staking + rwa-tax, but the deployed database never got that update, so
--- every staking launch failed to record and disappeared from Explore.
+-- Bring the live template check up to date, and recover the launches it rejected.
 --
+-- Two things are wrong in the deployed database. The check constraint predates
+-- both newer templates, so every staking launch succeeded on chain and then
+-- failed to record — which is why they vanished from Explore. And the RWA
+-- template's on-chain id is "rwa", not the "rwa-tax" that was reserved for it
+-- while it was still only a description on the site. The constraint compares
+-- strings, so the old name would reject every RWA launch the same way.
+--
+-- Supersedes fix-vault-template-check.sql, which set the old "rwa-tax" name.
 -- Run this once in the Supabase SQL editor, then refresh /explore.
 
 alter table public.ponsvault_launches
   drop constraint if exists ponsvault_launches_vault_template_check;
 
 alter table public.ponsvault_launches
-  add constraint ponsvault_launches_vault_template_check
-  check (
+  add constraint ponsvault_launches_vault_template_check check (
     vault_template is null
-    or vault_template in ('buyback-burn', 'staking', 'lottery', 'rwa-tax')
+    or vault_template in ('buyback-burn', 'staking', 'lottery', 'rwa')
   );
 
--- Backfill the three staking launches that already exist on-chain under the
--- current launcher. Safe to re-run: upserts on token.
+-- OPTIONAL, and already done on the live database.
+--
+-- Only needed where the old constraint rejected staking launches, leaving them
+-- on chain but missing from the table. Check before running:
+--
+--   select symbol, vault_template from public.ponsvault_launches
+--   where vault_template = 'staking';
+--
+-- Safe to re-run regardless: upserts on token.
 
 insert into public.ponsvault_launches (
   token, name, symbol, description, logo,
@@ -69,3 +81,14 @@ on conflict (token) do update set
   fee_wallet = excluded.fee_wallet,
   transaction_hash = excluded.transaction_hash,
   launched_at = excluded.launched_at;
+
+-- Verify the constraint took, and that it lists 'rwa' rather than 'rwa-tax':
+--
+--   select pg_get_constraintdef(oid)
+--   from pg_constraint
+--   where conname = 'ponsvault_launches_vault_template_check';
+--
+-- Verify the backfill:
+--
+--   select symbol, vault_template from public.ponsvault_launches
+--   order by launched_at desc limit 10;

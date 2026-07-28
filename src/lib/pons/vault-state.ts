@@ -1,6 +1,19 @@
 import type { Address, PublicClient } from 'viem';
 
+import { PONS_RWA_VAULT_ABI } from '@/lib/rwa/abi';
+
+import { PONS_WETH } from './contracts';
 import { PONSVAULT_LAUNCHER_ABI, isVaultLauncherDeployed, vaultLauncherAddress } from './vault';
+
+const ERC20_BALANCE_ABI = [
+  {
+    type: 'function',
+    name: 'balanceOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'account', type: 'address' }],
+    outputs: [{ type: 'uint256' }],
+  },
+] as const;
 
 /** Reads and actions exposed by a deployed PonsBuybackBurnVault. */
 export const PONS_VAULT_ABI = [
@@ -202,7 +215,18 @@ export interface StakingVaultState extends VaultStateBase {
   totalTokenDistributed: bigint;
 }
 
-export type VaultState = BuybackVaultState | StakingVaultState;
+export interface RwaVaultState extends VaultStateBase {
+  template: 'rwa';
+  /** The stock this vault buys. Fixed at launch. */
+  rwaAsset: Address;
+  rwaPoolFee: number;
+  /** Rounds opened so far, each one a claimable distribution. */
+  roundCount: number;
+  /** Bought and allocated, but not yet collected by holders. */
+  undistributedRwa: bigint;
+}
+
+export type VaultState = BuybackVaultState | StakingVaultState | RwaVaultState;
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -264,9 +288,9 @@ export async function fetchVaultState(
     .readContract({ address: vault, abi: PONS_VAULT_ABI, functionName: 'template' })
     .catch(() => 'buyback-burn');
 
-  return template === 'staking'
-    ? fetchStakingVaultState(client, vault)
-    : fetchBuybackVaultState(client, vault);
+  if (template === 'staking') return fetchStakingVaultState(client, vault);
+  if (template === 'rwa') return fetchRwaVaultState(client, vault);
+  return fetchBuybackVaultState(client, vault);
 }
 
 async function fetchStakingVaultState(
@@ -297,6 +321,55 @@ async function fetchStakingVaultState(
     totalStaked,
     totalWethDistributed,
     totalTokenDistributed,
+    runCount,
+    lastRunAt,
+    canRun: canRunResult[0],
+    canRunReason: canRunResult[1],
+  };
+}
+
+async function fetchRwaVaultState(client: PublicClient, vault: Address): Promise<RwaVaultState> {
+  const base = { address: vault, abi: PONS_RWA_VAULT_ABI } as const;
+
+  const [config, canRunResult, roundCount, undistributedRwa, runCount, lastRunAt, token] =
+    await Promise.all([
+      client.readContract({ ...base, functionName: 'config' }),
+      client.readContract({ ...base, functionName: 'canRun' }),
+      client.readContract({ ...base, functionName: 'roundCount' }),
+      client.readContract({ ...base, functionName: 'undistributedRwa' }),
+      client.readContract({ ...base, functionName: 'runCount' }),
+      client.readContract({ ...base, functionName: 'lastRunAt' }),
+      client.readContract({ ...base, functionName: 'token' }),
+    ]);
+
+  // Read as plain balances rather than through a vault getter: this template
+  // spends its whole WETH balance on every run and burns the token side, so
+  // there is no encumbered portion to subtract.
+  const [pendingWeth, pendingToken] = await Promise.all([
+    client.readContract({
+      address: PONS_WETH,
+      abi: ERC20_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [vault],
+    }),
+    client.readContract({
+      address: token,
+      abi: ERC20_BALANCE_ABI,
+      functionName: 'balanceOf',
+      args: [vault],
+    }),
+  ]);
+
+  return {
+    template: 'rwa',
+    vault,
+    rwaAsset: config[0],
+    rwaPoolFee: Number(config[1]),
+    minHarvestWei: config[2],
+    pendingWeth,
+    pendingToken,
+    roundCount: Number(roundCount),
+    undistributedRwa,
     runCount,
     lastRunAt,
     canRun: canRunResult[0],

@@ -5,6 +5,12 @@ interface IUniswapV3Factory {
     function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address pool);
 }
 
+/// @dev Only the depth reading. {PonsRwaVault} uses it to refuse a route through a pool that was
+///      deployed but never funded, which is otherwise indistinguishable from a working one.
+interface IUniswapV3Pool {
+    function liquidity() external view returns (uint128);
+}
+
 /// @dev The Robinhood Chain router at 0xCaf681a6... is SwapRouter02, so `ExactInputSingleParams`
 ///      has no `deadline` field. Verified by selector: it exposes 0x04e45aaf, not 0x414bf389.
 interface ISwapRouter02 {

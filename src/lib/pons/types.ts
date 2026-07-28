@@ -7,11 +7,18 @@ import type { VaultTemplateId } from './vault';
  * it up — so the unit travels with the number rather than being assumed.
  */
 export interface VaultStat {
-  kind: 'burn' | 'stake';
+  kind: 'burn' | 'stake' | 'dividend';
   /** Whole-token decimal string. */
   amount: string;
-  /** Share of total supply, 0-100. */
+  /** Share of total supply, 0-100. Zero where the amount is not the launch's own token. */
   percent: number;
+  /**
+   * What `amount` is denominated in, when it is not the launch's own token.
+   *
+   * A dividend is paid in a stock, so neither the launch's symbol nor a share of
+   * its supply describes it. Present only where that applies.
+   */
+  unit?: string;
 }
 
 export interface PonsLaunchpadStatus {
@@ -168,4 +175,9 @@ export interface LaunchFormInput {
   vaultTreasury: string;
   /** Staking only. Days a stake is locked, counted from the staker's deposit. */
   vaultStakingLockDays: string;
+  /**
+   * RWA Dividend only. Address of the tokenized stock fees are converted
+   * into, which must be one of the curated assets and can never be changed.
+   */
+  vaultRwaAsset: string;
 }
