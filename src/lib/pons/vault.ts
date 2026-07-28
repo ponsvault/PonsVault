@@ -97,9 +97,9 @@ export function vaultLauncherAddress(): `0x${string}` {
 /**
  * Starting values for the Buyback & Burn config.
  *
- * `minHarvestEth` matches the keeper's own `KEEPER_MIN_WETH` floor on purpose.
- * Both floors apply and the higher one decides, so defaulting below the keeper's
- * would show creators a threshold that does not actually pace their vault.
+ * `minHarvestEth` is the only amount gate: the vault enforces it on every run,
+ * and the keeper has no second floor of its own. The form default is a starting
+ * suggestion; whatever the creator writes is what actually paces the vault.
  */
 export const BUYBACK_BURN_DEFAULTS = {
   burnPercent: '80',

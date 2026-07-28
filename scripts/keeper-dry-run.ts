@@ -11,7 +11,6 @@ import { runDueVaults } from '@/lib/keeper/run-vaults';
 
 const label: Record<string, string> = {
   'would-run': 'WOULD RUN',
-  'below-floor': 'holding  ',
   throttled: 'throttled',
   'not-ready': 'waiting  ',
   uneconomic: 'skipped  ',
@@ -32,9 +31,6 @@ async function main() {
     switch (outcome.status) {
       case 'would-run':
         console.log(`${head} ${outcome.weth} WETH harvested, ${outcome.tokens} tokens moved`);
-        break;
-      case 'below-floor':
-        console.log(`${head} ${outcome.weth} WETH against a ${outcome.floor} floor`);
         break;
       case 'throttled':
         console.log(`${head} next run allowed in ${outcome.nextRunIn}s`);

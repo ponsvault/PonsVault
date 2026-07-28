@@ -45,10 +45,6 @@ for (const outcome of body.outcomes) {
     );
   } else if (outcome.status === 'throttled') {
     console.log(`  holding ${outcome.symbol}: next run allowed in ${outcome.nextRunIn}s`);
-  } else if (outcome.status === 'below-floor') {
-    console.log(
-      `  holding ${outcome.symbol}: ${outcome.weth} WETH is under the ${outcome.floor} WETH floor`,
-    );
   } else if (outcome.status === 'uneconomic') {
     console.log(
       `  skipped ${outcome.symbol}: ${outcome.weth} WETH does not clear the ${outcome.gasCost} ETH gas cost`,
