@@ -3,9 +3,11 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { formatUnits, type Address, type Hex } from 'viem';
-import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
+import { useAccount, useConfig, useSwitchChain } from 'wagmi';
+import { getPublicClient, getWalletClient } from 'wagmi/actions';
 
 import { robinhoodChain } from '@/lib/pons/chain';
+import { PONS_CHAIN_ID } from '@/lib/pons/constants';
 import { formatWeth } from '@/lib/pons/vault-format';
 import type { RwaVaultState } from '@/lib/pons/vault-state';
 import { PONS_RWA_VAULT_ABI } from '@/lib/rwa/abi';
@@ -51,9 +53,9 @@ function formatAsset(amount: bigint | string, decimals: number): string {
  * only requirement, so there is deliberately nothing to opt into on this panel.
  */
 export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) {
-  const { address, isConnected } = useAccount();
-  const publicClient = usePublicClient();
-  const { data: walletClient } = useWalletClient();
+  const { address, isConnected, chainId } = useAccount();
+  const config = useConfig();
+  const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
 
   const asset = findRwaAsset(state.rwaAsset);
   const assetSymbol = asset?.symbol ?? 'stock';
@@ -79,9 +81,27 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
 
   const claimMutation = useMutation({
     mutationFn: async (row: ClaimRow) => {
-      if (!walletClient || !address || !publicClient) throw new Error('Connect a wallet first.');
+      if (!isConnected || !address) throw new Error('Connect a wallet to claim.');
 
-      const hash = await walletClient.writeContract({
+      // Every other write path on the site does this, and a claim needs it for
+      // the same reason: a wallet pointed elsewhere has no client for this
+      // chain, which is indistinguishable from not being connected at all.
+      if (chainId !== PONS_CHAIN_ID) {
+        await switchChainAsync({ chainId: PONS_CHAIN_ID });
+      }
+
+      // Asked for after the switch rather than taken from the render that
+      // queued this click. That copy still points at the chain the wallet was
+      // on a moment ago, so using it fails the first press and succeeds on the
+      // second — which reads as the button being broken.
+      const wallet = await getWalletClient(config, { chainId: PONS_CHAIN_ID });
+      const publicClient = getPublicClient(config, { chainId: PONS_CHAIN_ID });
+
+      // Both resolved before anything is sent, so a missing one is reported
+      // instead of surfacing after the claim is already on-chain.
+      if (!publicClient) throw new Error('Could not reach the chain to confirm the claim.');
+
+      const hash = await wallet.writeContract({
         address: state.vault,
         abi: PONS_RWA_VAULT_ABI,
         functionName: 'claim',
@@ -167,7 +187,9 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
                     onClick={() => claimMutation.mutate(row)}
                   >
                     {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    <span className="ui-btn-label">{sending ? 'Claiming…' : 'Claim'}</span>
+                    <span className="ui-btn-label">
+                      {sending ? (isSwitching ? 'Switching network…' : 'Claiming…') : 'Claim'}
+                    </span>
                   </button>
                 ) : (
                   <span className="token-rwa-claim-state">
