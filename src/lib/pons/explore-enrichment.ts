@@ -1,4 +1,7 @@
-import { formatEther, type Address } from 'viem';
+import { formatEther, formatUnits, type Address } from 'viem';
+
+import { PONS_RWA_VAULT_ABI } from '@/lib/rwa/abi';
+import { findRwaAsset } from '@/lib/rwa/assets';
 
 import { robinhoodPublicClient } from './client';
 import { PONS_TOTAL_SUPPLY } from './constants';
@@ -23,6 +26,35 @@ async function readVaultStat(vault: string | null | undefined): Promise<{ vaultS
     const template = await robinhoodPublicClient
       .readContract({ address, abi: PONS_VAULT_ABI, functionName: 'template' })
       .catch(() => 'buyback-burn');
+
+    // An RWA vault pays out a stock rather than the launch's own token, so it is
+    // measured in that stock's units and a share of the token supply says
+    // nothing about it. Reading `totalTokensBurned` here would simply revert.
+    if (template === 'rwa') {
+      const [config, distributed] = await Promise.all([
+        robinhoodPublicClient.readContract({
+          address,
+          abi: PONS_RWA_VAULT_ABI,
+          functionName: 'config',
+        }),
+        robinhoodPublicClient.readContract({
+          address,
+          abi: PONS_RWA_VAULT_ABI,
+          functionName: 'totalRwaDistributed',
+        }),
+      ]);
+
+      const asset = findRwaAsset(config[0]);
+
+      return {
+        vaultStat: {
+          kind: 'dividend',
+          amount: formatUnits(distributed, asset?.decimals ?? 18),
+          percent: 0,
+          unit: asset?.symbol ?? 'stock',
+        },
+      };
+    }
 
     const amountWei =
       template === 'staking'

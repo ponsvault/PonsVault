@@ -21,6 +21,7 @@ export const PONSVAULT_DEPLOYMENT = {
   registry: '0x770c1AA562f7DfA60934959585DaECf2d9AD32be',
   buybackFactory: '0x3926af4490B4BA5Af78d785DD9Ba527B383C1B1e',
   stakingFactory: '0x1d8B2395E7e5D059544c29f3ee9100fcab0FbbcC',
+  rwaFactory: '0xd015d819751671efCeBBba6A76e1Ad52465104C3',
   startBlock: 20_991_727n,
 } as const;
 
@@ -52,6 +53,11 @@ export const PONSVAULT_CONTRACTS: PonsVaultContract[] = [
     name: 'PonsStakingVaultFactory',
     role: 'Deploys one Staking vault per token, behind its own shared beacon.',
     address: ADDRESSES.stakingFactory,
+  },
+  {
+    name: 'PonsRwaVaultFactory',
+    role: 'Deploys one RWA Dividend vault per token. Also fixes the address allowed to post each round\u2019s allocation, so a creator cannot appoint themselves.',
+    address: ADDRESSES.rwaFactory,
   },
 ];
 

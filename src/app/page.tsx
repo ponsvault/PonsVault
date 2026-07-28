@@ -147,10 +147,10 @@ const TEMPLATES = [
     params: ['Round length', 'Prize share', 'Eligibility', 'Draw source'],
   },
   {
-    name: 'RWA Tax',
-    status: 'soon' as const,
-    body: 'ETH is reserved for tokenized-stock purchases. Keepers sell supported RWA assets to the vault, and holders can claim RWA dividends.',
-    params: ['Reserve share', 'Supported assets'],
+    name: 'RWA Dividend',
+    status: 'live' as const,
+    body: 'Fees buy a tokenized stock — GameStop, NVIDIA or SpaceX — which holders claim in proportion to what they hold. No staking, no opting in.',
+    params: ['Stock', 'Fees before a purchase'],
   },
 ];
 

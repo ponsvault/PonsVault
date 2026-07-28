@@ -22,6 +22,7 @@ import {
 } from '@/lib/pons/vault-state';
 import { cn, explorerAddressUrl, shortAddress } from '@/lib/utils';
 
+import { TokenRwaPanel } from './token-rwa-panel';
 import { TokenStakingPanel } from './token-staking-panel';
 
 interface TokenVaultPanelProps {
@@ -132,6 +133,10 @@ export function TokenVaultPanel({
         onChanged={() => refetch()}
       />
     );
+  }
+
+  if (state.template === 'rwa') {
+    return <TokenRwaPanel symbol={symbol} state={state} onChanged={() => refetch()} />;
   }
 
   return (

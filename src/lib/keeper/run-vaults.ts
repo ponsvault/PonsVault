@@ -21,6 +21,9 @@ import {
 } from '@/lib/pons/vault';
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from '@/lib/pons/vault-state';
 import { listPonsVaultLaunches } from '@/lib/launch-registry/store';
+import { PONS_RWA_VAULT_ABI } from '@/lib/rwa/abi';
+import { quoteToWeth } from '@/lib/rwa/asset-health';
+import { postPendingRoots, type RootOutcome } from './post-rwa-roots';
 
 /**
  * Value a run must move, as a multiple of the gas it costs.
@@ -73,7 +76,7 @@ const DEFAULT_DUST_WETH = '0.002';
  */
 const DEFAULT_MIN_INTERVAL_SECONDS = 300;
 
-type VaultTemplate = 'buyback-burn' | 'staking';
+type VaultTemplate = 'buyback-burn' | 'staking' | 'rwa';
 
 interface VaultRef {
   token: Address;
@@ -92,7 +95,14 @@ interface VaultRef {
  */
 export type VaultRunOutcome = VaultRef &
   (
-    | { status: 'ran'; hash: `0x${string}`; weth: string; tokens: string }
+    | {
+        status: 'ran';
+        hash: `0x${string}`;
+        weth: string;
+        tokens: string;
+        /** RWA only: what happened to each round's allocation after the run. */
+        roots?: RootOutcome[];
+      }
     | { status: 'would-run'; weth: string; tokens: string }
     | { status: 'not-ready'; reason: string }
     | { status: 'throttled'; nextRunIn: number }
@@ -200,7 +210,37 @@ async function burnBpsOf(vault: Address): Promise<bigint> {
  * `burnBps` cannot be zero — the vault's own `_validate` rejects that — so the
  * division is always safe.
  */
+/**
+ * What an RWA round is worth, in the WETH the gas comparison is denominated in.
+ *
+ * An RWA run returns a round id and an amount of stock, neither of which can be
+ * compared to a gas cost. Selling that stock back is the honest conversion, and
+ * it reads slightly low, which errs toward skipping a marginal run rather than
+ * overpaying for one.
+ *
+ * Falls back to the creator's own floor when the pool cannot be quoted. That is
+ * a real lower bound rather than a guess: `run` only gets as far as returning
+ * anything if it had at least `minHarvestWei` of WETH to spend.
+ */
+async function rwaRoundValue(vault: Address, rwaBought: bigint): Promise<bigint> {
+  const [asset, poolFee, minHarvestWei] = await robinhoodPublicClient.readContract({
+    address: vault,
+    abi: PONS_RWA_VAULT_ABI,
+    functionName: 'config',
+  });
+
+  try {
+    const quoted = await quoteToWeth(asset, poolFee, rwaBought);
+    if (quoted !== null && quoted > 0n) return quoted;
+  } catch {
+    // Unreachable quoter, not an unusable pool. Fall through to the bound.
+  }
+
+  return minHarvestWei;
+}
+
 async function harvestedWeth(vault: Address, template: VaultTemplate, returned: bigint): Promise<bigint> {
+  if (template === 'rwa') return rwaRoundValue(vault, returned);
   if (template !== 'buyback-burn') return returned;
 
   try {
@@ -226,6 +266,19 @@ type Wallet = ReturnType<typeof createWalletClient>;
  * and leaves the decision logic below template-agnostic.
  */
 function vaultRunner(vault: Address, template: VaultTemplate, account: Keeper, wallet: Wallet) {
+  if (template === 'rwa') {
+    // Same shape as buyback's `run`, but the returns mean something else
+    // entirely: a round id and the RWA bought, not WETH and tokens. Reusing the
+    // buyback branch would read round zero as "no WETH moved" and park every
+    // RWA vault below the floor forever, which is silent rather than loud.
+    const call = { address: vault, abi: PONS_RWA_VAULT_ABI, functionName: 'run', args: [0n] } as const;
+    return {
+      simulate: () => robinhoodPublicClient.simulateContract({ ...call, account }).then((r) => r.result),
+      estimateGas: () => robinhoodPublicClient.estimateContractGas({ ...call, account }),
+      write: () => wallet.writeContract({ ...call, account, chain: robinhoodChain }),
+    };
+  }
+
   if (template === 'staking') {
     const call = { address: vault, abi: PONS_STAKING_VAULT_ABI, functionName: 'run', args: [] } as const;
     return {
@@ -349,7 +402,8 @@ export async function runDueVaults(options: RunDueVaultsOptions = {}): Promise<K
         abi: PONS_VAULT_ABI,
         functionName: 'template',
       });
-      template = reported === 'staking' ? 'staking' : 'buyback-burn';
+      template =
+        reported === 'staking' ? 'staking' : reported === 'rwa' ? 'rwa' : 'buyback-burn';
     } catch {
       // Vaults deployed before `template()` existed are all buyback-and-burn.
       template = 'buyback-burn';
@@ -381,18 +435,23 @@ export async function runDueVaults(options: RunDueVaultsOptions = {}): Promise<K
       continue;
     }
 
-    let returnedWeth: bigint;
-    let tokens: bigint;
+    let first: bigint;
+    let second: bigint;
     try {
-      [returnedWeth, tokens] = await runner.simulate();
+      [first, second] = await runner.simulate();
     } catch (error) {
       outcomes.push({ ...ref, status: 'not-ready', reason: reasonOf(error) });
       continue;
     }
 
+    // Buyback and staking return (weth, tokens). RWA returns (roundId, stock
+    // bought), so its first slot is an identifier and carries no value at all.
+    const measured = template === 'rwa' ? second : first;
+    const tokens = second;
+
     // Every decision below is about the whole harvest, which is not what every
     // template returns.
-    const weth = await harvestedWeth(vault, template, returnedWeth);
+    const weth = await harvestedWeth(vault, template, measured);
 
     // A run that moves nothing at all is a wasted transaction even if it succeeds.
     if (weth === 0n && tokens === 0n) {
@@ -457,12 +516,28 @@ export async function runDueVaults(options: RunDueVaultsOptions = {}): Promise<K
         continue;
       }
       ran += 1;
+
+      // An RWA round pays nobody until its allocation is published, so this is
+      // part of the run rather than a follow-up. It is deliberately not allowed
+      // to undo the run: the swap has already happened and the round exists, so
+      // a failure here is reported and retried next tick, not treated as the
+      // run having failed.
+      let roots: RootOutcome[] | undefined;
+      if (template === 'rwa') {
+        try {
+          roots = await postPendingRoots({ token, vault, account, wallet });
+        } catch (error) {
+          roots = [{ roundId: -1, status: 'failed', reason: reasonOf(error) }];
+        }
+      }
+
       outcomes.push({
         ...ref,
         status: 'ran',
         hash,
         weth: formatEther(weth),
         tokens: formatEther(tokens),
+        ...(roots ? { roots } : {}),
       });
     } catch (error) {
       outcomes.push({ ...ref, status: 'failed', reason: reasonOf(error) });

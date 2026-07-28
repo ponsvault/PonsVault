@@ -10,6 +10,8 @@ import {
   type TransactionReceipt,
 } from 'viem';
 
+import { findRwaAsset } from '@/lib/rwa/assets';
+
 import { PONS_DEFAULT_CONFIG_ID, PONS_DEFAULT_DEX_ID } from './constants';
 import { PONSVAULT_DEPLOYMENT } from './deployments';
 import type { LaunchFormInput, PonsLaunchMetadata } from './types';
@@ -26,7 +28,7 @@ import type { LaunchFormInput, PonsLaunchMetadata } from './types';
  * id stays, because it still describes tokens that were launched without one and
  * is the fallback while no launcher is configured.
  */
-export type VaultTemplateId = 'none' | 'buyback-burn' | 'staking' | 'lottery' | 'rwa-tax';
+export type VaultTemplateId = 'none' | 'buyback-burn' | 'staking' | 'lottery' | 'rwa';
 
 export interface VaultTemplate {
   id: VaultTemplateId;
@@ -55,11 +57,10 @@ export const VAULT_TEMPLATES: VaultTemplate[] = [
     status: 'soon',
   },
   {
-    id: 'rwa-tax',
-    name: 'RWA Tax',
-    tagline:
-      'ETH is reserved for tokenized-stock purchases. Keepers sell supported RWA assets to the vault, and holders can claim RWA dividends.',
-    status: 'soon',
+    id: 'rwa',
+    name: 'RWA Dividend',
+    tagline: 'Fees buy a tokenized stock. Holders claim their share — no staking needed.',
+    status: 'available',
   },
 ];
 
@@ -120,6 +121,18 @@ export const STAKING_DEFAULTS = {
 /** Longest lock the contract will accept, mirroring its MAX_LOCK_PERIOD. */
 export const STAKING_MAX_LOCK_DAYS = 365;
 
+/**
+ * Starting values for the RWA Dividend config.
+ *
+ * No default asset. The choice is permanent and the three that are offered
+ * differ in ways a creator should look at rather than inherit, so the form
+ * makes them pick.
+ */
+export const RWA_DEFAULTS = {
+  asset: '',
+  minHarvestEth: '0.025',
+} as const;
+
 /* -------------------------------------------------------------------------- */
 /* abi                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -151,6 +164,12 @@ const VAULT_CONFIG_COMPONENTS = [
 
 const STAKING_CONFIG_COMPONENTS = [
   { name: 'lockPeriod', type: 'uint32' },
+  { name: 'minHarvestWei', type: 'uint256' },
+] as const;
+
+const RWA_CONFIG_COMPONENTS = [
+  { name: 'rwaAsset', type: 'address' },
+  { name: 'rwaPoolFee', type: 'uint24' },
   { name: 'minHarvestWei', type: 'uint256' },
 ] as const;
 
@@ -261,6 +280,31 @@ export function buildStakingConfig(input: LaunchFormInput): StakingConfigArgs {
   };
 }
 
+export interface RwaConfigArgs {
+  rwaAsset: `0x${string}`;
+  rwaPoolFee: number;
+  minHarvestWei: bigint;
+}
+
+/**
+ * The fee tier is not the creator's to choose: it comes from the curated entry
+ * for the asset they picked, because it records the pool that was measured as
+ * deep enough. A creator who typed a tier could name one that exists but holds
+ * nothing, and the asset is fixed forever once the vault is built.
+ */
+export function buildRwaConfig(input: LaunchFormInput): RwaConfigArgs {
+  const asset = findRwaAsset(input.vaultRwaAsset.trim());
+  if (!asset) {
+    throw new Error('Choose one of the supported stocks for this vault.');
+  }
+
+  return {
+    rwaAsset: asset.address,
+    rwaPoolFee: asset.poolFee,
+    minHarvestWei: parseEther(input.vaultMinHarvestEth.trim() || '0'),
+  };
+}
+
 /**
  * Harvest pacing, which every template configures the same way.
  *
@@ -311,6 +355,18 @@ export function validateVaultInput(input: LaunchFormInput): string | null {
     return null;
   }
 
+  if (input.vaultTemplate === 'rwa') {
+    // Restricted to the curated list rather than any address with a pool. The
+    // vault only refuses a pool that is completely empty, and most tokenized
+    // stocks on this chain sit just above that: their pools exist but hold
+    // almost nothing, so every round would be lost to price impact. The asset
+    // cannot be changed afterwards, so this is the only chance to catch it.
+    if (!findRwaAsset(input.vaultRwaAsset.trim())) {
+      return 'Choose one of the supported stocks for this vault.';
+    }
+    return null;
+  }
+
   const burnPercent = Number(input.vaultBurnPercent);
   if (!Number.isFinite(burnPercent) || burnPercent <= 0 || burnPercent > 100) {
     return 'Burn share must be between 0 and 100 percent.';
@@ -338,6 +394,13 @@ function encodeVaultConfig(input: LaunchFormInput): Hex {
     return encodeAbiParameters(
       [{ type: 'tuple', components: STAKING_CONFIG_COMPONENTS }],
       [buildStakingConfig(input)],
+    );
+  }
+
+  if (input.vaultTemplate === 'rwa') {
+    return encodeAbiParameters(
+      [{ type: 'tuple', components: RWA_CONFIG_COMPONENTS }],
+      [buildRwaConfig(input)],
     );
   }
 

@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 import { Reveal } from '@/components/ui/reveal';
 import { fetchRecentLaunches } from '@/lib/pons/api';
+import type { VaultStat } from '@/lib/pons/types';
 import { VAULT_TEMPLATES } from '@/lib/pons/vault';
 import { cn, formatUsd, ipfsToGateway } from '@/lib/utils';
 
@@ -23,6 +24,18 @@ function formatCompact(value: string): string {
 function templateName(id: string | null | undefined): string | null {
   return VAULT_TEMPLATES.find((entry) => entry.id === id)?.name ?? null;
 }
+
+const VAULT_STAT_VERB: Record<VaultStat['kind'], string> = {
+  burn: 'burned',
+  stake: 'staked',
+  dividend: 'paid out',
+};
+
+const VAULT_STAT_IDLE: Record<VaultStat['kind'], string> = {
+  burn: 'Nothing burned yet',
+  stake: 'Nobody staked yet',
+  dividend: 'No dividend paid yet',
+};
 
 export function ExploreGrid() {
   const { data = [], isLoading, isError, refetch } = useQuery({
@@ -119,18 +132,20 @@ export function ExploreGrid() {
                     <span className="pv-token-vault-template">{template}</span>
                     {stat && statAmount > 0 ? (
                       <span className="pv-token-vault-burn">
-                        {stat.kind === 'stake' ? (
-                          <Coins className="h-3 w-3" strokeWidth={2} />
-                        ) : (
+                        {stat.kind === 'burn' ? (
                           <Flame className="h-3 w-3" strokeWidth={2} />
+                        ) : (
+                          <Coins className="h-3 w-3" strokeWidth={2} />
                         )}
-                        {formatCompact(stat.amount)} {launch.symbol}{' '}
-                        {stat.kind === 'stake' ? 'staked' : 'burned'} ·{' '}
-                        {stat.percent.toFixed(2)}%
+                        {formatCompact(stat.amount)} {stat.unit ?? launch.symbol}{' '}
+                        {VAULT_STAT_VERB[stat.kind]}
+                        {/* A dividend is paid in a stock, so a share of this
+                            token's supply would be a meaningless number. */}
+                        {stat.unit ? null : ` · ${stat.percent.toFixed(2)}%`}
                       </span>
                     ) : (
                       <span className="pv-token-vault-idle">
-                        {stat?.kind === 'stake' ? 'Nobody staked yet' : 'Nothing burned yet'}
+                        {VAULT_STAT_IDLE[stat?.kind ?? 'burn']}
                       </span>
                     )}
                   </div>
