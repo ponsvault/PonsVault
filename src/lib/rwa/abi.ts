@@ -167,4 +167,26 @@ export const PONS_RWA_VAULT_ABI = [
       { name: 'snapshotBlock', type: 'uint256', indexed: false },
     ],
   },
+
+  // Declared so a revert arrives with a name rather than a selector. Without
+  // these the keeper reports a vault holding no fees as "Unrecognised error
+  // 0x3f29331a", which reads like a fault in the vault rather than the most
+  // ordinary outcome there is. Taken from the compiled ABI, so the inherited
+  // ones are here too.
+  { type: 'error', name: 'AlreadyClaimed', inputs: [{ name: 'roundId', type: 'uint256' }, { name: 'account', type: 'address' }] },
+  { type: 'error', name: 'InvalidProof', inputs: [{ name: 'roundId', type: 'uint256' }, { name: 'account', type: 'address' }] },
+  { type: 'error', name: 'InvalidRwaAsset', inputs: [] },
+  { type: 'error', name: 'LengthMismatch', inputs: [] },
+  { type: 'error', name: 'NoSuchRound', inputs: [{ name: 'roundId', type: 'uint256' }] },
+  { type: 'error', name: 'NotDistributor', inputs: [{ name: 'caller', type: 'address' }, { name: 'distributor', type: 'address' }] },
+  { type: 'error', name: 'NothingBought', inputs: [] },
+  { type: 'error', name: 'NothingToHarvest', inputs: [] },
+  { type: 'error', name: 'NothingToReclaim', inputs: [{ name: 'roundId', type: 'uint256' }] },
+  { type: 'error', name: 'RootAlreadyPosted', inputs: [{ name: 'roundId', type: 'uint256' }] },
+  { type: 'error', name: 'RootNotPosted', inputs: [{ name: 'roundId', type: 'uint256' }] },
+  { type: 'error', name: 'RoundExhausted', inputs: [{ name: 'roundId', type: 'uint256' }, { name: 'remaining', type: 'uint256' }, { name: 'requested', type: 'uint256' }] },
+  { type: 'error', name: 'RoundNotExpired', inputs: [{ name: 'roundId', type: 'uint256' }, { name: 'expiresAt', type: 'uint256' }] },
+  { type: 'error', name: 'RwaPoolEmpty', inputs: [{ name: 'pool', type: 'address' }] },
+  { type: 'error', name: 'RwaPoolNotFound', inputs: [{ name: 'rwaAsset', type: 'address' }, { name: 'poolFee', type: 'uint24' }] },
+  { type: 'error', name: 'ZeroAddress', inputs: [] },
 ] as const;
