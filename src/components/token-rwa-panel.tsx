@@ -2,7 +2,6 @@
 
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { useState } from 'react';
 import { formatUnits, type Hex } from 'viem';
 import { useAccount, useConfig, useSwitchChain } from 'wagmi';
 import { getPublicClient, getWalletClient } from 'wagmi/actions';
@@ -23,9 +22,6 @@ interface ClaimRow {
   rootPosted: boolean;
   claimable: boolean;
 }
-
-/** One round, or every claimable round in a single transaction. */
-type ClaimTarget = ClaimRow | 'all';
 
 interface TokenRwaPanelProps {
   symbol: string;
@@ -50,34 +46,17 @@ function formatAsset(amount: bigint | string, decimals: number): string {
 }
 
 /**
- * Newest first. Open rounds stay above settled ones so the list answers
- * "what can I take" before it answers "what have I already taken".
- */
-function sortClaims(rows: ClaimRow[]): ClaimRow[] {
-  return [...rows].sort((a, b) => {
-    const rank = (row: ClaimRow) => (row.claimable ? 0 : row.rootPosted ? 2 : 1);
-    const byState = rank(a) - rank(b);
-    if (byState !== 0) return byState;
-    return b.roundId - a.roundId;
-  });
-}
-
-/**
  * The holder's side of an RWA Dividend vault.
  *
- * Everything here is about one question — what is mine and can I take it — so
- * the vault's own statistics stay secondary to the claim list. Holding is the
- * only requirement, so there is deliberately nothing to opt into on this panel.
- *
- * Rounds accumulate one per keeper pass, so the list is built to stay short:
- * claimable rounds stay visible, claimed ones collapse behind a toggle, and
- * several unclaimed ones share a single Claim all that hits `claimMany`.
+ * Rounds are an implementation detail of how the keeper posts allocations —
+ * holders care about what they can take and what they already took. The panel
+ * collapses every round into those two totals and claims through `claimMany`
+ * when more than one is owed.
  */
 export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) {
   const { address, isConnected, chainId } = useAccount();
   const config = useConfig();
   const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
-  const [showClaimed, setShowClaimed] = useState(false);
 
   const asset = findRwaAsset(state.rwaAsset);
   const assetSymbol = asset?.symbol ?? 'stock';
@@ -101,25 +80,16 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
     enabled: Boolean(address) && state.roundCount > 0,
   });
 
-  const sorted = sortClaims(claims ?? []);
-  const unclaimed = sorted.filter((row) => row.claimable);
-  const awaiting = sorted.filter((row) => !row.claimable && !row.claimed);
-  const claimed = sorted.filter((row) => row.claimed);
+  const unclaimed = (claims ?? []).filter((row) => row.claimable);
+  const claimedTotal = (claims ?? [])
+    .filter((row) => row.claimed)
+    .reduce((sum, row) => sum + BigInt(row.amount), 0n);
   const owed = unclaimed.reduce((sum, row) => sum + BigInt(row.amount), 0n);
 
-  // Claimable and still-open rounds stay in the list. Claimed ones are a
-  // history the holder already knows about, so they sit behind a toggle once
-  // there is more than one — a vault that has run for months would otherwise
-  // bury the Claim button under a wall of settled rows.
-  const visible = [
-    ...unclaimed,
-    ...awaiting,
-    ...(showClaimed || claimed.length <= 1 ? claimed : []),
-  ];
-
   const claimMutation = useMutation({
-    mutationFn: async (target: ClaimTarget) => {
+    mutationFn: async () => {
       if (!isConnected || !address) throw new Error('Connect a wallet to claim.');
+      if (unclaimed.length === 0) throw new Error('Nothing left to claim.');
 
       // Every other write path on the site does this, and a claim needs it for
       // the same reason: a wallet pointed elsewhere has no client for this
@@ -139,16 +109,18 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
       // instead of surfacing after the claim is already on-chain.
       if (!publicClient) throw new Error('Could not reach the chain to confirm the claim.');
 
-      const rows = target === 'all' ? unclaimed : [target];
-      if (rows.length === 0) throw new Error('Nothing left to claim.');
-
       const hash =
-        rows.length === 1
+        unclaimed.length === 1
           ? await wallet.writeContract({
               address: state.vault,
               abi: PONS_RWA_VAULT_ABI,
               functionName: 'claim',
-              args: [BigInt(rows[0].roundId), address, BigInt(rows[0].amount), rows[0].proof],
+              args: [
+                BigInt(unclaimed[0].roundId),
+                address,
+                BigInt(unclaimed[0].amount),
+                unclaimed[0].proof,
+              ],
               chain: robinhoodChain,
               account: address,
             })
@@ -157,10 +129,10 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
               abi: PONS_RWA_VAULT_ABI,
               functionName: 'claimMany',
               args: [
-                rows.map((row) => BigInt(row.roundId)),
+                unclaimed.map((row) => BigInt(row.roundId)),
                 address,
-                rows.map((row) => BigInt(row.amount)),
-                rows.map((row) => row.proof),
+                unclaimed.map((row) => BigInt(row.amount)),
+                unclaimed.map((row) => row.proof),
               ],
               chain: robinhoodChain,
               account: address,
@@ -175,13 +147,12 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
     },
   });
 
-  const claimingAll = claimMutation.isPending && claimMutation.variables === 'all';
   const busy = claimMutation.isPending;
-
-  const pendingLabel = (sending: boolean) => {
-    if (!sending) return null;
-    return isSwitching ? 'Switching network…' : 'Claiming…';
-  };
+  const buttonLabel = busy
+    ? isSwitching
+      ? 'Switching network…'
+      : 'Claiming…'
+    : 'Claim';
 
   return (
     <section className="pv-panel token-vault">
@@ -195,24 +166,22 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
           <div className="token-vault-headline-figure">
             {formatAsset(owed, assetDecimals)} {assetSymbol}
           </div>
-          {unclaimed.length > 1 ? (
+          {owed > 0n ? (
             <button
               type="button"
               className="ui-btn ui-btn-primary token-vault-action"
               disabled={busy}
-              onClick={() => claimMutation.mutate('all')}
+              onClick={() => claimMutation.mutate()}
             >
-              {claimingAll ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-              <span className="ui-btn-label">
-                {pendingLabel(claimingAll) ?? `Claim all · ${unclaimed.length}`}
-              </span>
+              {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              <span className="ui-btn-label">{buttonLabel}</span>
             </button>
           ) : null}
         </div>
         <p className="token-vault-headline-note">
           {isConnected
             ? owed > 0n
-              ? `Yours to claim across ${unclaimed.length} round${unclaimed.length === 1 ? '' : 's'}.`
+              ? 'Yours to claim.'
               : 'Nothing to claim yet. Hold the token when a round opens and your share appears here.'
             : `Connect a wallet to see your share of the ${assetSymbol} this vault has bought.`}
         </p>
@@ -239,59 +208,21 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
         </p>
       ) : null}
 
-      {visible.length > 0 ? (
-        <ul className="token-rwa-claims">
-          {visible.map((row) => {
-            // Scoped to the row being sent, so pressing one round's button does
-            // not put every other row into a pending state it is not in.
-            const sending =
-              claimMutation.isPending &&
-              claimMutation.variables !== 'all' &&
-              claimMutation.variables?.roundId === row.roundId;
-
-            // One leftover round keeps its own Claim. Several share Claim all
-            // above, so the rows stay amounts rather than a column of identical
-            // buttons.
-            const showRowClaim = row.claimable && unclaimed.length === 1;
-
-            return (
-              <li key={row.roundId} className="token-rwa-claim">
-                <div className="token-rwa-claim-lead">
-                  <span className="token-rwa-claim-round">Round {row.roundId + 1}</span>
-                  <span className="token-rwa-claim-amount">
-                    {formatAsset(row.amount, assetDecimals)} {assetSymbol}
-                  </span>
-                </div>
-
-                {showRowClaim ? (
-                  <button
-                    type="button"
-                    className="ui-btn ui-btn-primary token-vault-action"
-                    disabled={busy}
-                    onClick={() => claimMutation.mutate(row)}
-                  >
-                    {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    <span className="ui-btn-label">{pendingLabel(sending) ?? 'Claim'}</span>
-                  </button>
-                ) : row.claimed ? (
-                  <span className="token-rwa-claim-state">Claimed</span>
-                ) : row.claimable ? null : (
-                  <span className="token-rwa-claim-state">Awaiting allocation</span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
-
-      {claimed.length > 1 ? (
-        <button
-          type="button"
-          className="token-rwa-claimed-toggle"
-          onClick={() => setShowClaimed((open) => !open)}
-        >
-          {showClaimed ? 'Hide claimed rounds' : `Show ${claimed.length} claimed rounds`}
-        </button>
+      {isConnected && !claimsLoading && claims ? (
+        <dl className="token-rwa-totals">
+          <div className="token-rwa-total">
+            <dt>Unclaimed</dt>
+            <dd>
+              {formatAsset(owed, assetDecimals)} {assetSymbol}
+            </dd>
+          </div>
+          <div className="token-rwa-total">
+            <dt>Claimed</dt>
+            <dd>
+              {formatAsset(claimedTotal, assetDecimals)} {assetSymbol}
+            </dd>
+          </div>
+        </dl>
       ) : null}
 
       {claimMutation.error ? (
