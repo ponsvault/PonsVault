@@ -40,6 +40,18 @@ export const PONS_RWA_VAULT_ABI = [
   },
   {
     type: 'function',
+    name: 'claimMany',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'roundIds', type: 'uint256[]' },
+      { name: 'account', type: 'address' },
+      { name: 'amounts', type: 'uint256[]' },
+      { name: 'proofs', type: 'bytes32[][]' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'rounds',
     stateMutability: 'view',
     inputs: [{ name: 'roundId', type: 'uint256' }],
