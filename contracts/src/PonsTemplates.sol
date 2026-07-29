@@ -16,4 +16,6 @@ library PonsTemplates {
     ///      transfer tax anywhere in it. Naming it after one would describe a different product.
     // forge-lint: disable-next-line(unsafe-typecast)
     bytes32 internal constant RWA = bytes32("rwa");
+    // forge-lint: disable-next-line(unsafe-typecast)
+    bytes32 internal constant LOTTERY = bytes32("lottery");
 }

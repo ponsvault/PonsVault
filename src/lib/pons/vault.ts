@@ -53,8 +53,8 @@ export const VAULT_TEMPLATES: VaultTemplate[] = [
   {
     id: 'lottery',
     name: 'Lottery',
-    tagline: 'Fees fund a prize pool paid to a holder each round.',
-    status: 'soon',
+    tagline: 'Fees fund a raffle. Holders enter, one wallet wins the pot.',
+    status: 'available',
   },
   {
     id: 'rwa',
@@ -133,6 +133,21 @@ export const RWA_DEFAULTS = {
   minHarvestEth: '0.025',
 } as const;
 
+/**
+ * Starting values for the Lottery config.
+ *
+ * Entry window and reveal delay are short enough that a round finishes the
+ * same day, and long enough that the operator cannot reveal in the same
+ * breath as the commit.
+ */
+export const LOTTERY_DEFAULTS = {
+  minHarvestEth: '0.025',
+  /** Hours holders may enter after a pot opens. */
+  entryHours: '6',
+  /** Minutes the operator must wait between commit and reveal. */
+  revealMinutes: '30',
+} as const;
+
 /* -------------------------------------------------------------------------- */
 /* abi                                                                        */
 /* -------------------------------------------------------------------------- */
@@ -171,6 +186,12 @@ const RWA_CONFIG_COMPONENTS = [
   { name: 'rwaAsset', type: 'address' },
   { name: 'rwaPoolFee', type: 'uint24' },
   { name: 'minHarvestWei', type: 'uint256' },
+] as const;
+
+const LOTTERY_CONFIG_COMPONENTS = [
+  { name: 'minHarvestWei', type: 'uint256' },
+  { name: 'entryPeriod', type: 'uint32' },
+  { name: 'revealDelay', type: 'uint32' },
 ] as const;
 
 /**
@@ -305,6 +326,23 @@ export function buildRwaConfig(input: LaunchFormInput): RwaConfigArgs {
   };
 }
 
+export interface LotteryConfigArgs {
+  minHarvestWei: bigint;
+  entryPeriod: number;
+  revealDelay: number;
+}
+
+export function buildLotteryConfig(input: LaunchFormInput): LotteryConfigArgs {
+  const entryHours = Number(input.vaultLotteryEntryHours || LOTTERY_DEFAULTS.entryHours);
+  const revealMinutes = Number(input.vaultLotteryRevealMinutes || LOTTERY_DEFAULTS.revealMinutes);
+
+  return {
+    minHarvestWei: parseEther(input.vaultMinHarvestEth.trim() || '0'),
+    entryPeriod: Math.round(entryHours * 3_600),
+    revealDelay: Math.round(revealMinutes * 60),
+  };
+}
+
 /**
  * Harvest pacing, which every template configures the same way.
  *
@@ -367,6 +405,18 @@ export function validateVaultInput(input: LaunchFormInput): string | null {
     return null;
   }
 
+  if (input.vaultTemplate === 'lottery') {
+    const entryHours = Number(input.vaultLotteryEntryHours || '0');
+    const revealMinutes = Number(input.vaultLotteryRevealMinutes || '0');
+    if (!Number.isFinite(entryHours) || entryHours <= 0 || entryHours > 720) {
+      return 'Entry window must be between 0 and 720 hours.';
+    }
+    if (!Number.isFinite(revealMinutes) || revealMinutes <= 0 || revealMinutes > 10_080) {
+      return 'Reveal delay must be between 0 and 7 days.';
+    }
+    return null;
+  }
+
   const burnPercent = Number(input.vaultBurnPercent);
   if (!Number.isFinite(burnPercent) || burnPercent <= 0 || burnPercent > 100) {
     return 'Burn share must be between 0 and 100 percent.';
@@ -401,6 +451,13 @@ function encodeVaultConfig(input: LaunchFormInput): Hex {
     return encodeAbiParameters(
       [{ type: 'tuple', components: RWA_CONFIG_COMPONENTS }],
       [buildRwaConfig(input)],
+    );
+  }
+
+  if (input.vaultTemplate === 'lottery') {
+    return encodeAbiParameters(
+      [{ type: 'tuple', components: LOTTERY_CONFIG_COMPONENTS }],
+      [buildLotteryConfig(input)],
     );
   }
 

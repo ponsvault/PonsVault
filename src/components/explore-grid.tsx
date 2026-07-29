@@ -29,12 +29,14 @@ const VAULT_STAT_VERB: Record<VaultStat['kind'], string> = {
   burn: 'burned',
   stake: 'staked',
   dividend: 'paid out',
+  prize: 'won',
 };
 
 const VAULT_STAT_IDLE: Record<VaultStat['kind'], string> = {
   burn: 'Nothing burned yet',
   stake: 'Nobody staked yet',
   dividend: 'No dividend paid yet',
+  prize: 'No raffle paid yet',
 };
 
 export function ExploreGrid() {

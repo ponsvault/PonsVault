@@ -22,6 +22,7 @@ import {
 } from '@/lib/pons/vault-state';
 import { cn, explorerAddressUrl, shortAddress } from '@/lib/utils';
 
+import { TokenLotteryPanel } from './token-lottery-panel';
 import { TokenRwaPanel } from './token-rwa-panel';
 import { TokenStakingPanel } from './token-staking-panel';
 
@@ -137,6 +138,10 @@ export function TokenVaultPanel({
 
   if (state.template === 'rwa') {
     return <TokenRwaPanel symbol={symbol} state={state} onChanged={() => refetch()} />;
+  }
+
+  if (state.template === 'lottery') {
+    return <TokenLotteryPanel symbol={symbol} state={state} onChanged={() => refetch()} />;
   }
 
   return (

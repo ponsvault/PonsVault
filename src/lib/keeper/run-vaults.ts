@@ -20,8 +20,10 @@ import {
 } from '@/lib/pons/vault';
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from '@/lib/pons/vault-state';
 import { listPonsVaultLaunches } from '@/lib/launch-registry/store';
+import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
 import { PONS_RWA_VAULT_ABI } from '@/lib/rwa/abi';
 import { quoteToWeth } from '@/lib/rwa/asset-health';
+import { advanceLotteryDraw, type DrawOutcome } from './lottery-draws';
 import { postPendingRoots, type RootOutcome } from './post-rwa-roots';
 
 /**
@@ -50,7 +52,7 @@ const DEFAULT_MIN_VALUE_RATIO = 3;
  */
 const DEFAULT_MIN_INTERVAL_SECONDS = 300;
 
-type VaultTemplate = 'buyback-burn' | 'staking' | 'rwa';
+type VaultTemplate = 'buyback-burn' | 'staking' | 'rwa' | 'lottery';
 
 interface VaultRef {
   token: Address;
@@ -76,6 +78,8 @@ export type VaultRunOutcome = VaultRef &
         tokens: string;
         /** RWA only: what happened to each round's allocation after the run. */
         roots?: RootOutcome[];
+        /** Lottery only: commit/reveal progress on the open round. */
+        draw?: DrawOutcome;
       }
     | { status: 'would-run'; weth: string; tokens: string }
     | { status: 'not-ready'; reason: string }
@@ -249,6 +253,17 @@ function vaultRunner(vault: Address, template: VaultTemplate, account: Keeper, w
     };
   }
 
+  if (template === 'lottery') {
+    // Returns (roundId, prizeWeth). Prize is the whole pot — use the second slot
+    // for value checks, same as RWA.
+    const call = { address: vault, abi: PONS_LOTTERY_VAULT_ABI, functionName: 'run', args: [] } as const;
+    return {
+      simulate: () => robinhoodPublicClient.simulateContract({ ...call, account }).then((r) => r.result),
+      estimateGas: () => robinhoodPublicClient.estimateContractGas({ ...call, account }),
+      write: () => wallet.writeContract({ ...call, account, chain: robinhoodChain }),
+    };
+  }
+
   if (template === 'staking') {
     const call = { address: vault, abi: PONS_STAKING_VAULT_ABI, functionName: 'run', args: [] } as const;
     return {
@@ -370,13 +385,44 @@ export async function runDueVaults(options: RunDueVaultsOptions = {}): Promise<K
         functionName: 'template',
       });
       template =
-        reported === 'staking' ? 'staking' : reported === 'rwa' ? 'rwa' : 'buyback-burn';
+        reported === 'staking'
+          ? 'staking'
+          : reported === 'rwa'
+            ? 'rwa'
+            : reported === 'lottery'
+              ? 'lottery'
+              : 'buyback-burn';
     } catch {
       // Vaults deployed before `template()` existed are all buyback-and-burn.
       template = 'buyback-burn';
     }
 
     const ref: VaultRef = { token, vault, symbol, template };
+
+    // Lottery rounds need commit/reveal on a schedule independent of opening a
+    // new pot — advance those first so a busy entry window still settles.
+    if (template === 'lottery') {
+      const draw = await advanceLotteryDraw({
+        vault,
+        account,
+        wallet,
+        dryRun: options.dryRun,
+      });
+      if (draw.status === 'failed') {
+        outcomes.push({ ...ref, status: 'failed', reason: draw.reason });
+      } else if (draw.status !== 'idle') {
+        outcomes.push({
+          ...ref,
+          status: 'ran',
+          hash: draw.hash,
+          weth: '0',
+          tokens: '0',
+          draw,
+        });
+        ran += 1;
+      }
+    }
+
     const runner = vaultRunner(vault, template, account, wallet);
 
     // Checked before simulating: a throttled vault should cost nothing to skip.
@@ -406,9 +452,9 @@ export async function runDueVaults(options: RunDueVaultsOptions = {}): Promise<K
       continue;
     }
 
-    // Buyback and staking return (weth, tokens). RWA returns (roundId, stock
-    // bought), so its first slot is an identifier and carries no value at all.
-    const measured = template === 'rwa' ? second : first;
+    // Buyback and staking return (weth, tokens). RWA/lottery return (roundId,
+    // amount), so the first slot is an identifier and carries no value.
+    const measured = template === 'rwa' || template === 'lottery' ? second : first;
     const tokens = second;
 
     // Every decision below is about the whole harvest, which is not what every

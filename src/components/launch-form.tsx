@@ -48,6 +48,7 @@ import {
 import { computeMaxDevBuyWei } from '@/lib/pons/max-dev-buy';
 import {
   BUYBACK_BURN_DEFAULTS,
+  LOTTERY_DEFAULTS,
   RWA_DEFAULTS,
   STAKING_DEFAULTS,
   STAKING_MAX_LOCK_DAYS,
@@ -79,6 +80,8 @@ const emptyForm: LaunchFormInput = {
   vaultMinHarvestEth: BUYBACK_BURN_DEFAULTS.minHarvestEth,
   vaultStakingLockDays: STAKING_DEFAULTS.lockDays,
   vaultRwaAsset: RWA_DEFAULTS.asset,
+  vaultLotteryEntryHours: LOTTERY_DEFAULTS.entryHours,
+  vaultLotteryRevealMinutes: LOTTERY_DEFAULTS.revealMinutes,
 };
 
 /** One entry of /api/rwa/assets: a curated stock, measured against the chain now. */
@@ -167,6 +170,17 @@ export function LaunchForm() {
   const rwaAvailable = Boolean(rwa?.registered) && rwaTradeable.length > 0;
   /** The answer is missing rather than negative, so it is still being fetched. */
   const rwaUnknown = rwa !== undefined && !rwa.complete;
+
+  const { data: lotteryStatus, isLoading: lotteryLoading } = useQuery<{ registered: boolean }>({
+    queryKey: ['lottery-status'],
+    queryFn: async () => {
+      const response = await fetch('/api/lottery/status');
+      if (!response.ok) throw new Error('Could not check lottery registration.');
+      return response.json();
+    },
+    staleTime: 60_000,
+  });
+  const lotteryAvailable = Boolean(lotteryStatus?.registered);
 
   const uploadMutation = useMutation({
     mutationFn: uploadTokenImage,
@@ -599,14 +613,21 @@ export function LaunchForm() {
 
             <div className="vault-picker" role="radiogroup" aria-label="Vault template">
               {VAULT_TEMPLATES.map((template) => {
-                // RWA Dividend answers to the registry rather than to this
-                // build, so it stays unselectable until a factory is actually
-                // registered and at least one stock is deep enough to buy.
-                const gatedOnChain = template.id === 'rwa';
+                // Templates that answer to the registry stay unselectable until
+                // their factory is registered (and for RWA, until a stock is
+                // deep enough to buy).
+                const gatedOnChain = template.id === 'rwa' || template.id === 'lottery';
+                const chainReady =
+                  template.id === 'rwa'
+                    ? rwaAvailable
+                    : template.id === 'lottery'
+                      ? lotteryAvailable
+                      : true;
+                const checking =
+                  (template.id === 'rwa' && (rwaLoading || rwaUnknown)) ||
+                  (template.id === 'lottery' && lotteryLoading);
                 const selectable =
-                  template.status === 'available' &&
-                  vaultsAvailable &&
-                  (!gatedOnChain || rwaAvailable);
+                  template.status === 'available' && vaultsAvailable && (!gatedOnChain || chainReady);
                 const selected = form.vaultTemplate === template.id;
 
                 return (
@@ -623,10 +644,7 @@ export function LaunchForm() {
                       <span className="vault-option-name">{template.name}</span>
                       {template.status === 'soon' ? (
                         <span className="pv-badge">Soon</span>
-                      ) : gatedOnChain && (rwaLoading || rwaUnknown) ? (
-                        // Still "Checking" while the answer is missing rather
-                        // than unfavourable: the template may well be live, and
-                        // saying otherwise on a failed read would be a guess.
+                      ) : checking ? (
                         <span className="pv-badge">Checking</span>
                       ) : !selectable ? (
                         <span className="pv-badge">Not deployed</span>
@@ -778,6 +796,65 @@ export function LaunchForm() {
                   <p className="launchpad-field-note">
                     The vault waits until this much has built up, then pays out. Set it higher and
                     stakers are paid less often in bigger amounts.
+                  </p>
+                </label>
+              </div>
+            </div>
+          ) : null}
+
+          {form.vaultTemplate === 'lottery' ? (
+            <div className="launchpad-field launchpad-field-wide vault-config">
+              <p className="launchpad-field-note">
+                Fees fill a prize pot. When the floor is hit, a round opens — holders enter, then
+                a commit–reveal draw pays the whole pot to one wallet. Token-side fees are burned.
+              </p>
+
+              <div className="vault-config-row">
+                <label className="launchpad-field">
+                  <span className="launchpad-label">Entry window (hours)</span>
+                  <input
+                    className="launchpad-input"
+                    inputMode="decimal"
+                    value={form.vaultLotteryEntryHours}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vaultLotteryEntryHours: e.target.value }))
+                    }
+                  />
+                  <p className="launchpad-field-note">
+                    How long holders have to Enter after a pot opens. Fixed forever once you launch.
+                  </p>
+                </label>
+
+                <label className="launchpad-field">
+                  <span className="launchpad-label">Reveal delay (minutes)</span>
+                  <input
+                    className="launchpad-input"
+                    inputMode="decimal"
+                    value={form.vaultLotteryRevealMinutes}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vaultLotteryRevealMinutes: e.target.value }))
+                    }
+                  />
+                  <p className="launchpad-field-note">
+                    Wait between locking the draw and paying the winner — stops the operator
+                    picking a seed after seeing who entered.
+                  </p>
+                </label>
+              </div>
+
+              <div className="vault-config-row">
+                <label className="launchpad-field">
+                  <span className="launchpad-label">Minimum fees before a round (ETH)</span>
+                  <input
+                    className="launchpad-input"
+                    inputMode="decimal"
+                    value={form.vaultMinHarvestEth}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vaultMinHarvestEth: e.target.value }))
+                    }
+                  />
+                  <p className="launchpad-field-note">
+                    The vault waits until this much has built up, then opens a raffle over the pot.
                   </p>
                 </label>
               </div>
@@ -1002,6 +1079,15 @@ export function LaunchForm() {
                 {selectedRwaAsset
                   ? `Buy ${selectedRwaAsset.symbol} · claimable by holders`
                   : 'Pick a stock'}
+              </dd>
+            </div>
+          ) : null}
+          {form.vaultTemplate === 'lottery' ? (
+            <div>
+              <dt>Creator fees</dt>
+              <dd>
+                Raffle · {form.vaultLotteryEntryHours || '6'}h entry ·{' '}
+                {form.vaultLotteryRevealMinutes || '30'}m reveal
               </dd>
             </div>
           ) : null}
