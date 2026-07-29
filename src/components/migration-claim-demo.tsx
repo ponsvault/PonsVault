@@ -35,7 +35,7 @@ function formatDemo(amount: bigint): string {
  * Claims here are simulated — there is no contract to call — so a founder can
  * walk through the experience without spending gas or needing a real snapshot.
  */
-export function MigrationClaimDemo() {
+export function MigrationClaimDemo({ symbol = 'MEOW' }: { symbol?: string }) {
   const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const [claimed, setClaimed] = useState(false);
@@ -73,7 +73,7 @@ export function MigrationClaimDemo() {
       <div className="mig-claim-headline">
         <div className="mig-claim-headline-row">
           <div className="mig-claim-figure">
-            {isConnected ? `${formatDemo(unclaimed)} EXAMPLE` : '—'}
+            {isConnected ? `${formatDemo(unclaimed)} $${symbol}` : '—'}
           </div>
           {isConnected && unclaimed > 0n ? (
             <button
@@ -110,14 +110,12 @@ export function MigrationClaimDemo() {
         <dl className="mig-claim-totals">
           <div className="mig-claim-total">
             <dt>Unclaimed</dt>
-            <dd>
-              {formatDemo(unclaimed)} EXAMPLE
-            </dd>
+            <dd>{`${formatDemo(unclaimed)} $${symbol}`}</dd>
           </div>
           <div className="mig-claim-total">
             <dt>Claimed</dt>
             <dd>
-              {formatDemo(claimedTotal)} EXAMPLE
+              {`${formatDemo(claimedTotal)} $${symbol}`}
               {claimed ? <Check className="mig-claim-check" size={14} strokeWidth={2.5} /> : null}
             </dd>
           </div>
