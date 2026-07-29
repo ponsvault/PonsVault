@@ -226,6 +226,19 @@
   color: var(--text-primary);
 }
 
+.mig-meta-list a,
+.pv-index a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--hairline-strong);
+  text-underline-offset: 3px;
+}
+
+.mig-meta-list a:hover,
+.pv-index a:hover {
+  text-decoration-color: var(--accent);
+}
+
 .mig-mono {
   font-family: var(--font-mono), ui-monospace, monospace;
   font-size: 12px;
