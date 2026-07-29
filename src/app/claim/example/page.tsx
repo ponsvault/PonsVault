@@ -67,33 +67,29 @@ export default function ExampleClaimPage() {
           <Reveal delay={0.06}>
             <section className="mig-meta">
               <h2 className="mig-meta-title">Migration details</h2>
-              <ul className="mig-meta-list">
-                <li>
+              <div className="mig-meta-pair">
+                <div className="mig-meta-side">
                   <span>Old token</span>
                   <strong>{`$${OLD_TOKEN}`}</strong>
-                </li>
-                <li>
+                  <span className="mig-meta-sub">Old contract</span>
+                  <a
+                    className="mig-mono mig-ca"
+                    href={explorerAddressUrl(OLD_CA)}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={OLD_CA}
+                  >
+                    {shortAddress(OLD_CA)}
+                  </a>
+                </div>
+                <div className="mig-meta-side">
                   <span>New token</span>
                   <strong>{`$${NEW_TOKEN}`}</strong>
-                </li>
-                <li>
-                  <span>Ratio</span>
-                  <strong>1 : 1</strong>
-                </li>
-                <li>
-                  <span>Old contract</span>
-                  <strong>
-                    <a
-                      className="mig-mono mig-ca"
-                      href={explorerAddressUrl(OLD_CA)}
-                      target="_blank"
-                      rel="noreferrer"
-                      title={OLD_CA}
-                    >
-                      {shortAddress(OLD_CA)}
-                    </a>
-                  </strong>
-                </li>
+                  <span className="mig-meta-sub">New contract</span>
+                  <span className="mig-mono mig-ca-pending">Published after deploy</span>
+                </div>
+              </div>
+              <ul className="mig-meta-list">
                 <li>
                   <span>Claim contract</span>
                   <strong className="mig-mono">Verified · open source</strong>

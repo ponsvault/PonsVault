@@ -197,6 +197,49 @@
   color: var(--text-primary);
 }
 
+/* Old token + CA on the left, new token + CA on the right. */
+.mig-meta-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 20px;
+  margin-bottom: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.mig-meta-side {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.mig-meta-side > span:first-child {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+}
+
+.mig-meta-side > strong {
+  font-size: 14px;
+  font-weight: var(--w-display);
+  color: var(--text-primary);
+}
+
+.mig-meta-sub {
+  margin-top: 10px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-subtle);
+}
+
+.mig-ca-pending {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
 .mig-meta-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -204,6 +247,12 @@
   margin: 0;
   padding: 0;
   list-style: none;
+}
+
+@media (max-width: 560px) {
+  .mig-meta-pair {
+    grid-template-columns: 1fr;
+  }
 }
 
 .mig-meta-list li {
@@ -226,6 +275,7 @@
   color: var(--text-primary);
 }
 
+.mig-meta-side a,
 .mig-meta-list a,
 .pv-index a {
   color: inherit;
