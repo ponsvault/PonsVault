@@ -67,7 +67,6 @@ export function MigrationClaimDemo({ symbol = 'MEOW' }: { symbol?: string }) {
     <section className="mig-claim-panel">
       <div className="mig-claim-panel-bar">
         <span className="mig-claim-panel-label">your allocation</span>
-        <span className="mig-claim-badge">Demo</span>
       </div>
 
       <div className="mig-claim-headline">
