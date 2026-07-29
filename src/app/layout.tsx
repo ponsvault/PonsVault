@@ -10,6 +10,7 @@ import './styles/home.css';
 import './styles/docs.css';
 import './styles/explore.css';
 import './styles/app-surface.css';
+import './styles/claim.css';
 
 // Variable Inter so the interface can use the 510 weight that reads as "medium but not bold".
 const inter = Inter({
