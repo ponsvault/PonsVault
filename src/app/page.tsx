@@ -142,9 +142,9 @@ const TEMPLATES = [
   },
   {
     name: 'Lottery',
-    status: 'soon' as const,
-    body: 'Fees accumulate into a prize pool and pay out to a holder drawn on-chain each round.',
-    params: ['Round length', 'Prize share', 'Eligibility', 'Draw source'],
+    status: 'live' as const,
+    body: 'Fees fill a pot. Holders enter while the window is open. A commit–reveal draw pays the whole pot to one wallet.',
+    params: ['Entry window', 'Reveal delay', 'Fees before a round'],
   },
   {
     name: 'RWA Dividend',

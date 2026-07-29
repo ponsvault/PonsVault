@@ -270,11 +270,13 @@ export default function DocsPage() {
               or no lock. Like every other parameter, it cannot be changed afterwards.
             </p>
 
-            <h3>Lottery — in development</h3>
+            <h3>Lottery</h3>
             <p>
-              Accumulates fees into a prize pool and pays a holder chosen at random each round. Still
-              being designed — picking a winner fairly on-chain is harder than it sounds when anyone
-              can trigger the draw.
+              Fees fill a prize pot. When the floor is hit, a round opens and holders Enter while
+              they still hold the token. After the entry window, the operator commits to a secret,
+              waits the reveal delay, then reveals — one entrant wins the whole pot in WETH. The
+              delay is what stops the operator picking a seed after seeing who entered. There is no
+              VRF on this chain; commit–reveal is the fair substitute. Token-side fees are burned.
             </p>
 
             <h3>RWA Dividend</h3>

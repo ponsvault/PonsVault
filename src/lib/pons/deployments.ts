@@ -22,6 +22,8 @@ export const PONSVAULT_DEPLOYMENT = {
   buybackFactory: '0x3926af4490B4BA5Af78d785DD9Ba527B383C1B1e',
   stakingFactory: '0x1d8B2395E7e5D059544c29f3ee9100fcab0FbbcC',
   rwaFactory: '0xd015d819751671efCeBBba6A76e1Ad52465104C3',
+  /** Blank until `DeployLotteryTemplate` is broadcast. */
+  lotteryFactory: '',
   startBlock: 20_991_727n,
 } as const;
 
@@ -58,6 +60,11 @@ export const PONSVAULT_CONTRACTS: PonsVaultContract[] = [
     name: 'PonsRwaVaultFactory',
     role: 'Deploys one RWA Dividend vault per token. Also fixes the address allowed to post each round\u2019s allocation, so a creator cannot appoint themselves.',
     address: ADDRESSES.rwaFactory,
+  },
+  {
+    name: 'PonsLotteryVaultFactory',
+    role: 'Deploys one Lottery vault per token. Fixes the operator that commits and reveals each draw, so a creator cannot pick the winner.',
+    address: ADDRESSES.lotteryFactory,
   },
 ];
 

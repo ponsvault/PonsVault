@@ -7,7 +7,7 @@ import type { VaultTemplateId } from './vault';
  * it up — so the unit travels with the number rather than being assumed.
  */
 export interface VaultStat {
-  kind: 'burn' | 'stake' | 'dividend';
+  kind: 'burn' | 'stake' | 'dividend' | 'prize';
   /** Whole-token decimal string. */
   amount: string;
   /** Share of total supply, 0-100. Zero where the amount is not the launch's own token. */
@@ -15,8 +15,9 @@ export interface VaultStat {
   /**
    * What `amount` is denominated in, when it is not the launch's own token.
    *
-   * A dividend is paid in a stock, so neither the launch's symbol nor a share of
-   * its supply describes it. Present only where that applies.
+   * A dividend is paid in a stock, and a lottery prize in ETH, so neither the
+   * launch's symbol nor a share of its supply describes it. Present only where
+   * that applies.
    */
   unit?: string;
 }
@@ -180,4 +181,8 @@ export interface LaunchFormInput {
    * into, which must be one of the curated assets and can never be changed.
    */
   vaultRwaAsset: string;
+  /** Lottery only. Hours holders may enter after a pot opens. */
+  vaultLotteryEntryHours: string;
+  /** Lottery only. Minutes between the operator's commit and reveal. */
+  vaultLotteryRevealMinutes: string;
 }

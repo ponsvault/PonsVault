@@ -1,5 +1,6 @@
 import type { Address, PublicClient } from 'viem';
 
+import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
 import { PONS_RWA_VAULT_ABI } from '@/lib/rwa/abi';
 
 import { PONS_WETH } from './contracts';
@@ -226,7 +227,22 @@ export interface RwaVaultState extends VaultStateBase {
   undistributedRwa: bigint;
 }
 
-export type VaultState = BuybackVaultState | StakingVaultState | RwaVaultState;
+export interface LotteryVaultState extends VaultStateBase {
+  template: 'lottery';
+  entryPeriod: number;
+  revealDelay: number;
+  roundCount: number;
+  /** Phase of the latest round, or None when none have opened. */
+  phase: number;
+  prizeWeth: bigint;
+  entryEndsAt: number;
+  revealAfter: number;
+  entrantCount: number;
+  winner: Address;
+  totalPrizePaid: bigint;
+}
+
+export type VaultState = BuybackVaultState | StakingVaultState | RwaVaultState | LotteryVaultState;
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
@@ -290,7 +306,69 @@ export async function fetchVaultState(
 
   if (template === 'staking') return fetchStakingVaultState(client, vault);
   if (template === 'rwa') return fetchRwaVaultState(client, vault);
+  if (template === 'lottery') return fetchLotteryVaultState(client, vault);
   return fetchBuybackVaultState(client, vault);
+}
+
+async function fetchLotteryVaultState(
+  client: PublicClient,
+  vault: Address,
+): Promise<LotteryVaultState> {
+  const base = { address: vault, abi: PONS_LOTTERY_VAULT_ABI } as const;
+
+  const [config, canRunResult, roundCount, totalPrizePaid, runCount, lastRunAt, idle] =
+    await Promise.all([
+      client.readContract({ ...base, functionName: 'config' }),
+      client.readContract({ ...base, functionName: 'canRun' }),
+      client.readContract({ ...base, functionName: 'roundCount' }),
+      client.readContract({ ...base, functionName: 'totalPrizePaid' }),
+      client.readContract({ ...base, functionName: 'runCount' }),
+      client.readContract({ ...base, functionName: 'lastRunAt' }),
+      client.readContract({ ...base, functionName: 'idleBalances' }),
+    ]);
+
+  const count = Number(roundCount);
+  let phase = 0;
+  let prizeWeth = 0n;
+  let entryEndsAt = 0;
+  let revealAfter = 0;
+  let entrantCount = 0;
+  let winner = ZERO_ADDRESS as Address;
+
+  if (count > 0) {
+    const [round, entrants] = await Promise.all([
+      client.readContract({ ...base, functionName: 'rounds', args: [BigInt(count - 1)] }),
+      client.readContract({ ...base, functionName: 'entrantCount', args: [BigInt(count - 1)] }),
+    ]);
+    prizeWeth = BigInt(round.prizeWeth);
+    entryEndsAt = Number(round.entryEndsAt);
+    revealAfter = Number(round.revealAfter);
+    winner = round.winner;
+    phase = Number(round.phase);
+    entrantCount = Number(entrants);
+  }
+
+  return {
+    template: 'lottery',
+    vault,
+    minHarvestWei: config[0],
+    entryPeriod: Number(config[1]),
+    revealDelay: Number(config[2]),
+    pendingWeth: idle[0],
+    pendingToken: idle[1],
+    roundCount: count,
+    phase,
+    prizeWeth,
+    entryEndsAt,
+    revealAfter,
+    entrantCount,
+    winner,
+    totalPrizePaid,
+    runCount,
+    lastRunAt,
+    canRun: canRunResult[0],
+    canRunReason: canRunResult[1],
+  };
 }
 
 async function fetchStakingVaultState(

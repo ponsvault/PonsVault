@@ -10,6 +10,8 @@ import { readPoolMarketSnapshot } from './pricing';
 import { readGraduationStatus, readTokenOnchainMetadata } from './token-state';
 import { isToken0Ordering } from './trades';
 import type { PonsLaunchRecord, VaultStat } from './types';
+import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
+
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from './vault-state';
 
 /**
@@ -52,6 +54,22 @@ async function readVaultStat(vault: string | null | undefined): Promise<{ vaultS
           amount: formatUnits(distributed, asset?.decimals ?? 18),
           percent: 0,
           unit: asset?.symbol ?? 'stock',
+        },
+      };
+    }
+
+    if (template === 'lottery') {
+      const paid = await robinhoodPublicClient.readContract({
+        address,
+        abi: PONS_LOTTERY_VAULT_ABI,
+        functionName: 'totalPrizePaid',
+      });
+      return {
+        vaultStat: {
+          kind: 'prize',
+          amount: formatEther(paid),
+          percent: 0,
+          unit: 'ETH',
         },
       };
     }
