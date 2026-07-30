@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter, Geist_Mono } from 'next/font/google';
 
-import { SiteHeader } from '@/components/site-header';
 import { Providers } from '@/components/providers';
+import { V2Lock } from '@/components/v2-lock';
 
 import './globals.css';
 import './styles/primitives.css';
@@ -11,6 +11,7 @@ import './styles/docs.css';
 import './styles/explore.css';
 import './styles/app-surface.css';
 import './styles/claim.css';
+import './styles/v2-lock.css';
 
 // Variable Inter so the interface can use the 510 weight that reads as "medium but not bold".
 const inter = Inter({
@@ -31,7 +32,7 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({
-  children,
+  children: _children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
@@ -39,12 +40,11 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="dark"
-      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased pv-v2-lock-active`}
     >
       <body className="min-h-full font-sans">
         <Providers>
-          <SiteHeader />
-          {children}
+          <V2Lock />
         </Providers>
       </body>
     </html>
