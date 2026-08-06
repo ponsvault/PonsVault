@@ -25,6 +25,10 @@ const launcherAbi = parseAbi([
   'function canLaunch() view returns (bool ready, string reason)',
 ]);
 
+const buybackFactoryAbi = parseAbi([
+  'function defaultBuyback() view returns (address)',
+]);
+
 export type ApprovedPairToken = V2PairToken & {
   approved: boolean;
   graduationThreshold: string;
@@ -46,6 +50,9 @@ export type PonsV2Status = {
   vaultCanLaunch: boolean;
   vaultCanLaunchReason: string;
   publicReady: boolean;
+  /** Live `defaultBuyback` on the buyback factory — required for burn runs. */
+  defaultBuyback: string | null;
+  buybackHelperReady: boolean;
 };
 
 export async function fetchPonsV2Status(): Promise<PonsV2Status> {
@@ -149,6 +156,21 @@ export async function fetchPonsV2Status(): Promise<PonsV2Status> {
     }
   }
 
+  let defaultBuyback: string | null = null;
+  try {
+    const buyback = await client.readContract({
+      address: PONSVAULT_V2_DEPLOYMENT.buybackFactory as `0x${string}`,
+      abi: buybackFactoryAbi,
+      functionName: 'defaultBuyback',
+    });
+    defaultBuyback = buyback;
+  } catch {
+    defaultBuyback = null;
+  }
+
+  const buybackHelperReady =
+    !!defaultBuyback && defaultBuyback !== '0x0000000000000000000000000000000000000000';
+
   return {
     factory,
     launchEnabled,
@@ -163,6 +185,8 @@ export async function fetchPonsV2Status(): Promise<PonsV2Status> {
     vaultCanLaunch,
     vaultCanLaunchReason,
     publicReady: launchEnabled && publicCanLaunch,
+    defaultBuyback,
+    buybackHelperReady,
   };
 }
 

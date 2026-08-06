@@ -12,6 +12,7 @@ import {PonsV2BuybackBurnVault} from "../vaults/PonsV2BuybackBurnVault.sol";
 contract PonsV2BuybackBurnVaultFactory is Ownable2Step, IPonsV2VaultFactory {
     error VaultAlreadyExists(address token, address vault);
     error NotTokenDeployer(address caller, address deployer);
+    error VaultNotFound(address token);
 
     event VaultCreated(address indexed token, address indexed vault, address indexed creator);
     event DefaultBuybackChanged(address indexed buyback);
@@ -71,6 +72,13 @@ contract PonsV2BuybackBurnVaultFactory is Ownable2Step, IPonsV2VaultFactory {
     function setDefaultBuyback(address _buyback) external onlyOwner {
         defaultBuyback = _buyback;
         emit DefaultBuybackChanged(_buyback);
+    }
+
+    /// @notice Retrofit an existing vault with a buyback helper (or replace one).
+    function setVaultBuyback(address token, address _buyback) external onlyOwner {
+        address vault = vaultOf[token];
+        if (vault == address(0)) revert VaultNotFound(token);
+        PonsV2BuybackBurnVault(vault).setBuyback(_buyback);
     }
 
     function upgradeVaultImplementation(address newImplementation) external onlyOwner {

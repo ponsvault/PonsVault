@@ -23,6 +23,7 @@ contract PonsV2BuybackBurnVault is PonsV2VaultBase {
     error InvalidBurnBps(uint16 burnBps);
     error TreasuryRequired();
     error BuybackRequired();
+    error NotFactory(address caller);
 
     event TreasuryPaid(address indexed treasury, uint256 amount);
     event BuybackExecuted(uint256 quoteSpent, uint256 tokensBought);
@@ -40,6 +41,9 @@ contract PonsV2BuybackBurnVault is PonsV2VaultBase {
 
     /// @notice Optional helper that swaps quote → launch token into this vault.
     address public buyback;
+
+    /// @notice Factory that created this vault. Only it may {setBuyback}.
+    address public factory;
 
     uint256 public totalTreasuryPaid;
     uint256 public totalQuoteBoughtBack;
@@ -59,7 +63,18 @@ contract PonsV2BuybackBurnVault is PonsV2VaultBase {
         }
         config = _config;
         buyback = _buyback;
+        factory = msg.sender;
         emit Configured(_config.burnBps, _config.treasury, _config.minHarvest);
+        emit BuybackChanged(_buyback);
+    }
+
+    /// @notice Point this vault at an {IQuoteBuyback}. Called by the factory owner via the factory.
+    function setBuyback(address _buyback) external {
+        if (msg.sender != factory) revert NotFactory(msg.sender);
+        if (config.burnBps == PonsV2Addresses.BPS_DENOMINATOR && _buyback == address(0)) {
+            revert BuybackRequired();
+        }
+        buyback = _buyback;
         emit BuybackChanged(_buyback);
     }
 

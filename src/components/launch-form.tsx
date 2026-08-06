@@ -164,7 +164,10 @@ export function LaunchForm() {
 
   const validationError = useMemo(() => validateLaunchInput(form, undefined), [form]);
 
-  const vaultConfigError = useMemo(() => validateV2VaultInput(form), [form]);
+  const vaultConfigError = useMemo(
+    () => validateV2VaultInput(form, { buybackHelperReady: status?.buybackHelperReady }),
+    [form, status?.buybackHelperReady],
+  );
 
   const burnSharePercent = Number(form.vaultBurnPercent);
   const treasuryInvalid =
