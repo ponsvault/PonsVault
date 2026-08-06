@@ -1,32 +1,80 @@
+'use client';
+
+import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { ArrowUpRight, Flame } from 'lucide-react';
 
+import { SHOWCASE_VAULT_TOKEN } from '@/lib/pons/showcase-vault';
+
 /**
- * Static mock of a vault's control surface, used as the hero visual.
- *
- * Values are illustrative. It exists to show the shape of the product rather
- * than to decorate the page, so it uses the same hairlines, mono numerals and
- * spacing as the real UI.
- *
- * It shows the Buyback & Burn template specifically, so it is labelled as one
- * example — the product is the vault layer, not this single template.
+ * Live $VAULT control surface — same data as the hero, denser layout.
  */
 
-const CONFIG: [string, string][] = [
-  ['Template', 'Buyback & Burn'],
-  ['Pair', 'AAPL'],
-  ['Burn share', '80%'],
-  ['Buys every', '0.05 AAPL in fees'],
-];
+interface ShowcaseRun {
+  time: string;
+  label: string;
+  value: string;
+  unit: string;
+  burn: boolean;
+}
 
-const ACTIVITY: { time: string; label: string; value: string; burn?: boolean }[] = [
-  { time: '12:04', label: 'Burned', value: '1,284,910 PONSV', burn: true },
-  { time: '06:02', label: 'Bought back', value: '0.0391 AAPL' },
-  { time: '06:02', label: 'Harvested', value: '0.0489 AAPL' },
-  { time: '00:01', label: 'Burned', value: '902,441 PONSV', burn: true },
-  { time: '18:00', label: 'Treasury paid', value: '0.0098 AAPL' },
-];
+interface ShowcaseResponse {
+  symbol: string;
+  pairSymbol: string;
+  burnBps: number;
+  treasuryBps: number;
+  minHarvest: string;
+  pending: string;
+  totalBurned: string;
+  canRun: boolean;
+  runs: ShowcaseRun[];
+  href: string;
+}
+
+async function fetchShowcase(): Promise<ShowcaseResponse> {
+  const response = await fetch('/api/vault/showcase');
+  if (!response.ok) throw new Error('Could not load $VAULT stats.');
+  return response.json();
+}
 
 export function VaultPanel() {
+  const { data, isLoading } = useQuery({
+    queryKey: ['showcase-vault'],
+    queryFn: fetchShowcase,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const symbol = data?.symbol ?? SHOWCASE_VAULT_TOKEN.symbol;
+  const pair = data?.pairSymbol ?? SHOWCASE_VAULT_TOKEN.pairSymbol;
+  const href = data?.href ?? `/launchpad/${SHOWCASE_VAULT_TOKEN.token}`;
+  const burnPercent = data ? data.burnBps / 100 : null;
+
+  const config: [string, string][] = [
+    ['Template', 'Buyback & Burn'],
+    ['Pair', pair],
+    ['Burn share', burnPercent != null ? `${burnPercent}%` : '…'],
+    ['Buys every', data ? `${data.minHarvest} ${pair} in fees` : '…'],
+  ];
+
+  const activity =
+    data?.runs.map((run) => ({
+      time: run.time,
+      label: run.label === 'Bought' ? 'Bought back' : run.label,
+      value: `${run.value} ${run.unit}`,
+      burn: run.burn,
+    })) ??
+    (isLoading
+      ? [{ time: '…', label: 'Loading', value: '…', burn: false }]
+      : [
+          {
+            time: '—',
+            label: 'Burned',
+            value: `${data?.totalBurned ?? '—'} ${symbol}`,
+            burn: true,
+          },
+        ]);
+
   return (
     <div className="pv-panel vault-panel">
       <div className="pv-panel-bar">
@@ -35,11 +83,20 @@ export function VaultPanel() {
           <span />
           <span />
         </div>
-        <span className="pv-panel-bar-label">vault · $PONSV</span>
-        <span className="pv-badge">Example</span>
-        <span className="pv-badge pv-badge-live vault-panel-live">
-          <span className="pv-dot pv-pulse-dot" />
-          Active
+        <span className="pv-panel-bar-label">vault · ${symbol}</span>
+        <span className="pv-badge">Live</span>
+        <span className={`pv-badge ${data?.canRun ? 'pv-badge-live' : ''} vault-panel-live`}>
+          {data?.canRun ? (
+            <>
+              <span className="pv-dot pv-pulse-dot" />
+              Ready
+            </>
+          ) : (
+            <>
+              <span className="pv-dot" />
+              Active
+            </>
+          )}
         </span>
       </div>
 
@@ -50,7 +107,7 @@ export function VaultPanel() {
             <span className="pv-badge">Immutable</span>
           </header>
           <dl className="vault-panel-rows">
-            {CONFIG.map(([label, value]) => (
+            {config.map(([label, value]) => (
               <div key={label} className="vault-panel-row">
                 <dt>{label}</dt>
                 <dd className="pv-mono">{value}</dd>
@@ -62,10 +119,12 @@ export function VaultPanel() {
         <section className="vault-panel-col">
           <header className="vault-panel-col-head">
             <span>Recent runs</span>
-            <span className="pv-mono vault-panel-count">24h</span>
+            <span className="pv-mono vault-panel-count">
+              {data ? `${data.totalBurned} burned` : '…'}
+            </span>
           </header>
           <ul className="vault-panel-activity">
-            {ACTIVITY.map((item, index) => (
+            {activity.map((item, index) => (
               <li key={index}>
                 <span className="pv-mono vault-panel-time">{item.time}</span>
                 <span className="vault-panel-label">
@@ -82,14 +141,16 @@ export function VaultPanel() {
       <footer className="vault-panel-foot">
         <div className="vault-panel-pending">
           <span className="vault-panel-pending-label">Pending fees</span>
-          <span className="pv-mono vault-panel-pending-value">0.0412 AAPL</span>
+          <span className="pv-mono vault-panel-pending-value">
+            {data ? `${data.pending} ${pair}` : '…'}
+          </span>
         </div>
         <div className="vault-panel-actions">
           <span className="vault-panel-hint">Callable by anyone</span>
-          <span className="pv-btn pv-btn-primary">
-            Run vault
+          <Link href={href} className="pv-btn pv-btn-primary">
+            Open vault
             <ArrowUpRight className="h-3.5 w-3.5" />
-          </span>
+          </Link>
         </div>
       </footer>
     </div>
