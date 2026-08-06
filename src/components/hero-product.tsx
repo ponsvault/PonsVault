@@ -1,18 +1,80 @@
 'use client';
 
+import { useQuery } from '@tanstack/react-query';
+import Link from 'next/link';
 import { Flame } from 'lucide-react';
 
+import { SHOWCASE_VAULT_TOKEN } from '@/lib/pons/showcase-vault';
+
 /**
- * Hero product stage — inspired by Linear's full-app mock and Raycast's
- * floating window: the product is the visual, not a caption under it.
+ * Hero product stage — live $VAULT vault stats, not a caption under a mock.
  */
-const RUNS = [
-  { time: '12:04', label: 'Burned', value: '1,284,910', unit: 'PONSV', burn: true },
-  { time: '06:02', label: 'Bought', value: '0.039', unit: 'AAPL', burn: false },
-  { time: '00:01', label: 'Burned', value: '902,441', unit: 'PONSV', burn: true },
-];
+
+interface ShowcaseRun {
+  time: string;
+  label: string;
+  value: string;
+  unit: string;
+  burn: boolean;
+}
+
+interface ShowcaseResponse {
+  symbol: string;
+  pairSymbol: string;
+  burnBps: number;
+  treasuryBps: number;
+  minHarvest: string;
+  pending: string;
+  runCount: string;
+  totalBurned: string;
+  canRun: boolean;
+  runs: ShowcaseRun[];
+  float: { title: string; body: string };
+  href: string;
+  error?: string;
+}
+
+async function fetchShowcase(): Promise<ShowcaseResponse> {
+  const response = await fetch('/api/vault/showcase');
+  if (!response.ok) throw new Error('Could not load $VAULT stats.');
+  return response.json();
+}
 
 export function HeroProduct() {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['showcase-vault'],
+    queryFn: fetchShowcase,
+    refetchInterval: 60_000,
+    staleTime: 30_000,
+  });
+
+  const symbol = data?.symbol ?? SHOWCASE_VAULT_TOKEN.symbol;
+  const pair = data?.pairSymbol ?? SHOWCASE_VAULT_TOKEN.pairSymbol;
+  const burnPercent = data ? data.burnBps / 100 : null;
+  const treasuryPercent = data ? data.treasuryBps / 100 : null;
+  const href = data?.href ?? `/launchpad/${SHOWCASE_VAULT_TOKEN.token}`;
+  const live = data?.canRun ?? false;
+
+  const runs: ShowcaseRun[] =
+    data?.runs && data.runs.length > 0
+      ? data.runs
+      : [
+          {
+            time: '—',
+            label: 'Burned',
+            value: data?.totalBurned ?? (isLoading ? '…' : '—'),
+            unit: symbol,
+            burn: true,
+          },
+          {
+            time: '—',
+            label: 'Runs',
+            value: data?.runCount ?? (isLoading ? '…' : '0'),
+            unit: 'total',
+            burn: false,
+          },
+        ];
+
   return (
     <div className="hero-product">
       <div className="hero-product-shell">
@@ -29,7 +91,7 @@ export function HeroProduct() {
           </nav>
           <div className="hero-product-side-meta">
             <span>Pair</span>
-            <strong>AAPL</strong>
+            <strong>{pair}</strong>
           </div>
         </aside>
 
@@ -37,41 +99,62 @@ export function HeroProduct() {
           <header className="hero-product-top">
             <div>
               <p className="hero-product-kicker">Buyback &amp; Burn</p>
-              <h3>$PONSV</h3>
+              <h3>
+                <Link href={href} className="hero-product-token-link">
+                  ${symbol}
+                </Link>
+              </h3>
             </div>
-            <span className="pv-badge pv-badge-live">
-              <span className="pv-dot pv-pulse-dot" />
-              Active
+            <span className={`pv-badge ${live ? 'pv-badge-live' : ''}`}>
+              {live ? (
+                <>
+                  <span className="pv-dot pv-pulse-dot" />
+                  Ready
+                </>
+              ) : isError ? (
+                'Offline'
+              ) : (
+                <>
+                  <span className="pv-dot" />
+                  Active
+                </>
+              )}
             </span>
           </header>
 
           <div className="hero-product-stats">
             <div>
               <span>Burn share</span>
-              <strong>80%</strong>
+              <strong>{burnPercent != null ? `${burnPercent}%` : '…'}</strong>
             </div>
             <div>
               <span>Treasury</span>
-              <strong>20%</strong>
+              <strong>{treasuryPercent != null ? `${treasuryPercent}%` : '…'}</strong>
             </div>
             <div>
               <span>Pending</span>
-              <strong className="pv-mono">0.041 AAPL</strong>
+              <strong className="pv-mono">
+                {data ? `${data.pending} ${pair}` : '…'}
+              </strong>
             </div>
             <div>
               <span>Threshold</span>
-              <strong className="pv-mono">0.05 AAPL</strong>
+              <strong className="pv-mono">
+                {data ? `${data.minHarvest} ${pair}` : '…'}
+              </strong>
             </div>
           </div>
 
           <div className="hero-product-runs">
             <div className="hero-product-runs-head">
               <span>Recent runs</span>
-              <span className="pv-mono">24h</span>
+              <span className="pv-mono">
+                {data ? `${data.totalBurned} burned` : isLoading ? '…' : '—'}
+              </span>
             </div>
             <ul>
-              {RUNS.map((run) => (
-                <li key={`${run.time}-${run.label}-${run.value}`}>
+              {runs.map((run, index) => (
+                <li key={`${run.time}-${run.label}-${run.value}-${index}`}>
                   <span className="pv-mono">{run.time}</span>
                   <span className="hero-product-run-label">
                     {run.burn ? <Flame className="h-3 w-3" strokeWidth={2} /> : null}
@@ -87,7 +170,9 @@ export function HeroProduct() {
 
           <footer className="hero-product-foot">
             <span>Callable by anyone · no operator keys</span>
-            <span className="pv-btn pv-btn-primary hero-product-cta">Run vault</span>
+            <Link href={href} className="pv-btn pv-btn-primary hero-product-cta">
+              Open vault
+            </Link>
           </footer>
         </div>
       </div>
@@ -95,8 +180,11 @@ export function HeroProduct() {
       <aside className="hero-product-float" aria-hidden="true">
         <span className="pv-dot pv-pulse-dot" />
         <div>
-          <strong>Keeper ran vault</strong>
-          <p>Burned 1.28M PONSV from 0.039 AAPL</p>
+          <strong>{data?.float.title ?? 'Loading vault…'}</strong>
+          <p>
+            {data?.float.body ??
+              (isLoading ? `Reading $${symbol} from chain…` : `$${symbol} on Robinhood Chain`)}
+          </p>
         </div>
       </aside>
     </div>
