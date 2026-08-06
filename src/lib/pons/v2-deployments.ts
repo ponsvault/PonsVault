@@ -9,11 +9,8 @@ export const PONSVAULT_V2_DEPLOYMENT = {
   registry: '0xaA9C86049A258D4A076d3eF367F69C231C9746D5',
   buybackFactory: '0xdE4670A2Be85Baa3f6a2C1F6443101EA041362aB',
   stakingFactory: '0x1488473464F2C6E6c5C412f05d805c619322E7EB',
-  /**
-   * Curve-phase IQuoteBuyback. Empty until `WirePonsV2Buyback.s.sol` is broadcast
-   * by the buyback factory owner; new launches then get it via defaultBuyback.
-   */
-  curveBuyback: '',
+  /** Curve-phase IQuoteBuyback — wired 2026-08-07 via WirePonsV2Buyback.s.sol. */
+  curveBuyback: '0x0aC10bAA445A9678F1FA29c515aa44D7513662f1',
   /** First block of the DeployPonsV2Vault broadcast. */
   startBlock: 29599074n,
 } as const;
