@@ -239,6 +239,16 @@
   color: var(--text-primary);
 }
 
+.hero-product-token-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.hero-product-token-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .hero-product-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
