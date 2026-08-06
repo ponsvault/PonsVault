@@ -177,7 +177,7 @@ const TEMPLATES = [
   },
   {
     name: 'RWA Dividend',
-    status: 'soon' as const,
+    status: 'live' as const,
     body: 'Fees buy a tokenized stock. Holders claim by balance — no staking.',
   },
 ];
@@ -189,7 +189,7 @@ function Templates() {
         <div className="pv-section-head">
           <div>
             <p className="pv-eyebrow">Templates</p>
-            <h2 className="pv-h2 pv-section-title">Two live today. More next.</h2>
+            <h2 className="pv-h2 pv-section-title">Three live today. More next.</h2>
           </div>
           <Link href="/launch" className="pv-link pv-section-link">
             Launch with a vault

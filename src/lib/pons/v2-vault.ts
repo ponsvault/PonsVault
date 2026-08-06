@@ -9,6 +9,8 @@ import {
   type TransactionReceipt,
 } from 'viem';
 
+import { findRwaAsset } from '@/lib/rwa/assets';
+
 import { PONS_DEFAULT_CONFIG_ID } from './constants';
 import type { LaunchFormInput } from './types';
 import {
@@ -35,12 +37,13 @@ export function v2VaultLauncherAddress(): `0x${string}` {
 export const V2_VAULT_TEMPLATES: Exclude<VaultTemplateId, 'none'>[] = [
   'buyback-burn',
   'staking',
+  'rwa',
 ];
 
 export function isV2VaultTemplate(
   id: VaultTemplateId,
-): id is 'buyback-burn' | 'staking' {
-  return id === 'buyback-burn' || id === 'staking';
+): id is 'buyback-burn' | 'staking' | 'rwa' {
+  return id === 'buyback-burn' || id === 'staking' || id === 'rwa';
 }
 
 /* -------------------------------------------------------------------------- */
@@ -75,6 +78,12 @@ const BUYBACK_CONFIG_COMPONENTS = [
 ] as const;
 
 const STAKING_CONFIG_COMPONENTS = [{ name: 'minHarvest', type: 'uint256' }] as const;
+
+const RWA_CONFIG_COMPONENTS = [
+  { name: 'rwaAsset', type: 'address' },
+  { name: 'rwaPoolFee', type: 'uint24' },
+  { name: 'minHarvestWei', type: 'uint256' },
+] as const;
 
 export const PONSVAULT_V2_LAUNCHER_ABI = [
   {
@@ -170,11 +179,30 @@ export function buildV2StakingConfig(input: LaunchFormInput) {
   return { minHarvest: parseMinHarvest(input) };
 }
 
+export function buildV2RwaConfig(input: LaunchFormInput) {
+  const asset = findRwaAsset(input.vaultRwaAsset.trim());
+  if (!asset) {
+    throw new Error('Choose one of the supported stocks for this vault.');
+  }
+  return {
+    rwaAsset: asset.address,
+    rwaPoolFee: asset.poolFee,
+    minHarvestWei: parseMinHarvest(input),
+  };
+}
+
 function encodeV2VaultConfig(input: LaunchFormInput): Hex {
   if (input.vaultTemplate === 'staking') {
     return encodeAbiParameters(
       [{ type: 'tuple', components: STAKING_CONFIG_COMPONENTS }],
       [buildV2StakingConfig(input)],
+    );
+  }
+
+  if (input.vaultTemplate === 'rwa') {
+    return encodeAbiParameters(
+      [{ type: 'tuple', components: RWA_CONFIG_COMPONENTS }],
+      [buildV2RwaConfig(input)],
     );
   }
 
@@ -215,6 +243,13 @@ export function validateV2VaultInput(
   }
 
   if (input.vaultTemplate === 'staking') return null;
+
+  if (input.vaultTemplate === 'rwa') {
+    if (!findRwaAsset(input.vaultRwaAsset.trim())) {
+      return 'Choose one of the supported stocks for this vault.';
+    }
+    return null;
+  }
 
   const burnPercent = Number(input.vaultBurnPercent);
   const helperReady = options?.buybackHelperReady === true;

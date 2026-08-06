@@ -9,6 +9,8 @@ export const PONSVAULT_V2_DEPLOYMENT = {
   registry: '0xaA9C86049A258D4A076d3eF367F69C231C9746D5',
   buybackFactory: '0xdE4670A2Be85Baa3f6a2C1F6443101EA041362aB',
   stakingFactory: '0x1488473464F2C6E6c5C412f05d805c619322E7EB',
+  /** RWA Dividend factory — registered 2026-08-07 via RegisterPonsV2Rwa.s.sol. */
+  rwaFactory: '0xE3Dd55a527D7408d21f6Cc2aA66A488a0177C164',
   /** Curve-phase IQuoteBuyback — wired 2026-08-07 via WirePonsV2Buyback.s.sol. */
   curveBuyback: '0x0aC10bAA445A9678F1FA29c515aa44D7513662f1',
   /** First block of the DeployPonsV2Vault broadcast. */
@@ -117,6 +119,11 @@ export const PONSVAULT_V2_CONTRACTS = [
     name: 'PonsV2StakingVaultFactory',
     role: 'Deploys one Staking vault per token.',
     address: PONSVAULT_V2_DEPLOYMENT.stakingFactory,
+  },
+  {
+    name: 'PonsV2RwaVaultFactory',
+    role: 'Deploys one RWA Dividend vault per token and fixes the distributor that posts round roots.',
+    address: PONSVAULT_V2_DEPLOYMENT.rwaFactory,
   },
 ] as const;
 

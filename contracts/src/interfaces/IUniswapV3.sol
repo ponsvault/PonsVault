@@ -28,4 +28,14 @@ interface ISwapRouter02 {
         external
         payable
         returns (uint256 amountOut);
+
+    /// @dev Multihop path. Same SwapRouter02 shape as {ExactInputSingleParams}: no `deadline`.
+    struct ExactInputParams {
+        bytes path;
+        address recipient;
+        uint256 amountIn;
+        uint256 amountOutMinimum;
+    }
+
+    function exactInput(ExactInputParams calldata params) external payable returns (uint256 amountOut);
 }

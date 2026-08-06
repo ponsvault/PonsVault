@@ -3,6 +3,7 @@ import type { Address, Hex } from 'viem';
 import { robinhoodPublicClient } from './client';
 import { PONSVAULT_DEPLOYMENT } from './deployments';
 import { RpcUnavailableError, isRevert } from './rpc-errors';
+import { PONSVAULT_V2_DEPLOYMENT, isV2VaultLauncherDeployed } from './v2-deployments';
 
 const REGISTRY_ABI = [
   {
@@ -52,4 +53,26 @@ export async function factoryForTemplate(templateId: Hex): Promise<Address | nul
 
 export async function isTemplateRegistered(templateId: Hex): Promise<boolean> {
   return (await factoryForTemplate(templateId)) !== null;
+}
+
+/**
+ * Whether a template is registered on the live v2 registry.
+ *
+ * Launch UI is v2-first; RWA / staking / buyback availability for new launches
+ * is decided here rather than on the v1 registry.
+ */
+export async function isV2TemplateRegistered(templateId: Hex): Promise<boolean> {
+  if (!isV2VaultLauncherDeployed()) return false;
+  try {
+    const factory = await robinhoodPublicClient.readContract({
+      address: PONSVAULT_V2_DEPLOYMENT.registry as Address,
+      abi: REGISTRY_ABI,
+      functionName: 'factoryFor',
+      args: [templateId],
+    });
+    return factory !== ZERO;
+  } catch (error) {
+    if (isRevert(error)) return false;
+    throw new RpcUnavailableError('check which v2 templates are registered', error);
+  }
 }

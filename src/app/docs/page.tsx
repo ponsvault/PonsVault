@@ -283,9 +283,10 @@ export default function DocsPage() {
 
             <h3>RWA Dividend</h3>
             <p>
-              Converts the creator fees into a tokenized stock, which the vault holds until holders
-              claim it. Holders earn by holding — there is nothing to stake and nothing to opt into.
-              The token side of the fees is burned, as with Buyback &amp; Burn.
+              Converts creator fees (in the pairing asset) into a tokenized stock via Uniswap V3,
+              which the vault holds until holders claim it. Holders earn by holding — there is
+              nothing to stake and nothing to opt into. The token side of the fees is burned, as
+              with Buyback &amp; Burn.
             </p>
             <p>
               Each purchase opens a round. Your share of a round is worked out from what you held at
