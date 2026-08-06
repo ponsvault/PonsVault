@@ -7,11 +7,10 @@ import { Flame } from 'lucide-react';
 import { SHOWCASE_VAULT_TOKEN } from '@/lib/pons/showcase-vault';
 
 /**
- * Hero product stage — live $VAULT vault stats, not a caption under a mock.
+ * Hero product stage — live $VAULT lifetime stats from the vault contract.
  */
 
-interface ShowcaseRun {
-  time: string;
+interface ShowcaseRow {
   label: string;
   value: string;
   unit: string;
@@ -27,8 +26,9 @@ interface ShowcaseResponse {
   pending: string;
   runCount: string;
   totalBurned: string;
+  lastRunLabel: string;
   canRun: boolean;
-  runs: ShowcaseRun[];
+  rows: ShowcaseRow[];
   float: { title: string; body: string };
   href: string;
   error?: string;
@@ -55,25 +55,26 @@ export function HeroProduct() {
   const href = data?.href ?? `/launchpad/${SHOWCASE_VAULT_TOKEN.token}`;
   const live = data?.canRun ?? false;
 
-  const runs: ShowcaseRun[] =
-    data?.runs && data.runs.length > 0
-      ? data.runs
-      : [
-          {
-            time: '—',
-            label: 'Burned',
-            value: data?.totalBurned ?? (isLoading ? '…' : '—'),
-            unit: symbol,
-            burn: true,
-          },
-          {
-            time: '—',
-            label: 'Runs',
-            value: data?.runCount ?? (isLoading ? '…' : '0'),
-            unit: 'total',
-            burn: false,
-          },
-        ];
+  const rows: ShowcaseRow[] = data?.rows ?? [
+    {
+      label: 'Burned',
+      value: isLoading ? '…' : '—',
+      unit: symbol,
+      burn: true,
+    },
+    {
+      label: 'Harvested',
+      value: isLoading ? '…' : '—',
+      unit: pair,
+      burn: false,
+    },
+    {
+      label: 'Treasury',
+      value: isLoading ? '…' : '—',
+      unit: pair,
+      burn: false,
+    },
+  ];
 
   return (
     <div className="hero-product">
@@ -147,21 +148,24 @@ export function HeroProduct() {
 
           <div className="hero-product-runs">
             <div className="hero-product-runs-head">
-              <span>Recent runs</span>
+              <span>Lifetime</span>
               <span className="pv-mono">
-                {data ? `${data.totalBurned} burned` : isLoading ? '…' : '—'}
+                {data
+                  ? `${data.runCount} runs · last ${data.lastRunLabel}`
+                  : isLoading
+                    ? '…'
+                    : '—'}
               </span>
             </div>
             <ul>
-              {runs.map((run, index) => (
-                <li key={`${run.time}-${run.label}-${run.value}-${index}`}>
-                  <span className="pv-mono">{run.time}</span>
+              {rows.map((row) => (
+                <li key={row.label}>
                   <span className="hero-product-run-label">
-                    {run.burn ? <Flame className="h-3 w-3" strokeWidth={2} /> : null}
-                    {run.label}
+                    {row.burn ? <Flame className="h-3 w-3" strokeWidth={2} /> : null}
+                    {row.label}
                   </span>
-                  <span className="pv-mono">
-                    {run.value} <em>{run.unit}</em>
+                  <span className="pv-mono hero-product-run-value">
+                    {row.value} <em>{row.unit}</em>
                   </span>
                 </li>
               ))}

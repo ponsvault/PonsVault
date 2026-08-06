@@ -7,11 +7,10 @@ import { ArrowUpRight, Flame } from 'lucide-react';
 import { SHOWCASE_VAULT_TOKEN } from '@/lib/pons/showcase-vault';
 
 /**
- * Live $VAULT control surface — same data as the hero, denser layout.
+ * Live $VAULT control surface — same lifetime stats as the hero.
  */
 
-interface ShowcaseRun {
-  time: string;
+interface ShowcaseRow {
   label: string;
   value: string;
   unit: string;
@@ -22,12 +21,13 @@ interface ShowcaseResponse {
   symbol: string;
   pairSymbol: string;
   burnBps: number;
-  treasuryBps: number;
   minHarvest: string;
   pending: string;
+  runCount: string;
   totalBurned: string;
+  lastRunLabel: string;
   canRun: boolean;
-  runs: ShowcaseRun[];
+  rows: ShowcaseRow[];
   href: string;
 }
 
@@ -58,22 +58,14 @@ export function VaultPanel() {
   ];
 
   const activity =
-    data?.runs.map((run) => ({
-      time: run.time,
-      label: run.label === 'Bought' ? 'Bought back' : run.label,
-      value: `${run.value} ${run.unit}`,
-      burn: run.burn,
+    data?.rows.map((row) => ({
+      label: row.label,
+      value: `${row.value} ${row.unit}`,
+      burn: row.burn,
     })) ??
     (isLoading
-      ? [{ time: '…', label: 'Loading', value: '…', burn: false }]
-      : [
-          {
-            time: '—',
-            label: 'Burned',
-            value: `${data?.totalBurned ?? '—'} ${symbol}`,
-            burn: true,
-          },
-        ]);
+      ? [{ label: 'Loading', value: '…', burn: false }]
+      : [{ label: 'Burned', value: `— ${symbol}`, burn: true }]);
 
   return (
     <div className="pv-panel vault-panel">
@@ -118,15 +110,14 @@ export function VaultPanel() {
 
         <section className="vault-panel-col">
           <header className="vault-panel-col-head">
-            <span>Recent runs</span>
+            <span>Lifetime</span>
             <span className="pv-mono vault-panel-count">
-              {data ? `${data.totalBurned} burned` : '…'}
+              {data ? `${data.runCount} runs · last ${data.lastRunLabel}` : '…'}
             </span>
           </header>
           <ul className="vault-panel-activity">
             {activity.map((item, index) => (
               <li key={index}>
-                <span className="pv-mono vault-panel-time">{item.time}</span>
                 <span className="vault-panel-label">
                   {item.burn ? <Flame className="h-3 w-3" strokeWidth={2} /> : null}
                   {item.label}
