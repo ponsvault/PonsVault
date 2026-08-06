@@ -58,11 +58,18 @@ forge test --match-contract PonsV2VaultForkTest -vv
 | BuybackBurn factory | `0xdE4670A2Be85Baa3f6a2C1F6443101EA041362aB` |
 | Staking factory | `0x1488473464F2C6E6c5C412f05d805c619322E7EB` |
 
-`factory.canLaunch(launcher)` is **true**. `defaultBuyback` is still `address(0)` until `WirePonsV2Buyback` is broadcast.
+`factory.canLaunch(launcher)` is **true**.
+
+`defaultBuyback` wired 2026-08-07:
+
+| Piece | Address |
+|---|---|
+| PonsV2CurveBuyback | `0x0aC10bAA445A9678F1FA29c515aa44D7513662f1` |
+| Vault impl (upgraded) | `0xC3eb6aB2C79F752a64c65B8Fe3dEA80E166C1884` |
 
 ## Remaining product work
 
-1. Broadcast `WirePonsV2Buyback.s.sol` (factory owner)
+1. ~~Broadcast `WirePonsV2Buyback.s.sol`~~ (done 2026-08-07)
 2. Ship a Uniswap v4 `IQuoteBuyback` for graduated launches
 3. Port RWA / Lottery templates onto `PonsV2VaultBase`
 4. Token detail / trading UI for v2 curves
