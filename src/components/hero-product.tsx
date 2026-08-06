@@ -1,7 +1,6 @@
 'use client';
 
 import { Flame } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
 
 /**
  * Hero product stage — inspired by Linear's full-app mock and Raycast's
@@ -14,16 +13,9 @@ const RUNS = [
 ];
 
 export function HeroProduct() {
-  const reduced = useReducedMotion();
-
   return (
     <div className="hero-product">
-      <motion.div
-        className="hero-product-shell"
-        initial={reduced ? false : { opacity: 0, y: 28, scale: 0.985 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.75, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-      >
+      <div className="hero-product-shell">
         <aside className="hero-product-side" aria-hidden="true">
           <div className="hero-product-brand">
             <span className="pv-brand-mark">P</span>
@@ -98,21 +90,15 @@ export function HeroProduct() {
             <span className="pv-btn pv-btn-primary hero-product-cta">Run vault</span>
           </footer>
         </div>
-      </motion.div>
+      </div>
 
-      <motion.aside
-        className="hero-product-float"
-        aria-hidden="true"
-        initial={reduced ? false : { opacity: 0, y: 20, x: 8 }}
-        animate={{ opacity: 1, y: 0, x: 0 }}
-        transition={{ duration: 0.65, delay: 0.55, ease: [0.22, 1, 0.36, 1] }}
-      >
+      <aside className="hero-product-float" aria-hidden="true">
         <span className="pv-dot pv-pulse-dot" />
         <div>
           <strong>Keeper ran vault</strong>
           <p>Burned 1.28M PONSV from 0.039 AAPL</p>
         </div>
-      </motion.aside>
+      </aside>
     </div>
   );
 }
