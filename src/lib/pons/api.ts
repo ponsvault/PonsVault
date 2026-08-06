@@ -27,6 +27,11 @@ export async function fetchLaunchpadStatus(): Promise<PonsLaunchpadStatus> {
   return readJson<PonsLaunchpadStatus>(res);
 }
 
+export async function fetchV2Status(): Promise<import('./v2-status').PonsV2Status> {
+  const res = await fetch('/api/v2/status', { cache: 'no-store' });
+  return readJson(res);
+}
+
 export async function uploadTokenImage(file: File): Promise<string> {
   const form = new FormData();
   form.append('image', file);

@@ -4,17 +4,17 @@ import { AlertTriangle, ArrowRight, Info, Lightbulb } from 'lucide-react';
 
 import { Reveal } from '@/components/ui/reveal';
 import { PONSVAULT_GITHUB_URL } from '@/components/x-social-link';
+import type { PonsVaultContract } from '@/lib/pons/deployments';
 import {
-  PONSVAULT_CONTRACTS,
-  UPSTREAM_CONTRACTS,
-  type PonsVaultContract,
-} from '@/lib/pons/deployments';
+  PONS_V2_UPSTREAM_CONTRACTS,
+  PONSVAULT_V2_CONTRACTS,
+} from '@/lib/pons/v2-deployments';
 import { explorerAddressUrl, shortAddress } from '@/lib/utils';
 
 export const metadata: Metadata = {
-  title: 'Docs · PonsVault',
+  title: 'Docs · PonsVault V2',
   description:
-    'How PonsVault turns pons creator fees into an on-chain rule — the vault mechanic, the templates, the parameters, the contracts, and the security model.',
+    'How PonsVault V2 turns pons v2 creator fees into an on-chain rule — the vault mechanic, the templates, the parameters, the contracts, and the security model.',
 };
 
 const TOC = [
@@ -74,15 +74,18 @@ export default function DocsPage() {
       <section className="pv-docs-hero">
         <div className="pv-shell">
           <Reveal>
-            <p className="pv-index">Documentation</p>
-            <h1 className="pv-h1 pv-docs-title">Vaults that put your trading fees to work.</h1>
+            <p className="pv-index">
+              <span className="pv-badge pv-badge-live">V2</span>
+              Documentation
+            </p>
+            <h1 className="pv-h1 pv-docs-title">PonsVault V2</h1>
             <p className="pv-body pv-docs-lead">
-              PonsVault is an independent layer on top of{' '}
-              <a href="https://ponsfamily.com" target="_blank" rel="noreferrer">
-                pons
+              An independent vault layer on the open{' '}
+              <a href="https://docs.ponsfamily.com/v2" target="_blank" rel="noreferrer">
+                pons v2
               </a>{' '}
-              on Robinhood Chain. It does not change how your token launches or trades — it changes
-              where the creator fees go, and what happens to them once they arrive.
+              factory on Robinhood Chain. It does not change how your token launches or trades — it
+              changes where the creator fees go, and what happens to them once they arrive.
             </p>
           </Reveal>
         </div>
@@ -136,12 +139,11 @@ export default function DocsPage() {
             <div id="contracts" />
             <h2>Contracts</h2>
             <p>
-              Everything PonsVault does happens in these contracts, on Robinhood Chain (4663). They
-              are deployed once and reused by every launch — the only thing created per token is a
-              small vault of your chosen template. The rest of this page explains what they do and
-              why.
+              Everything PonsVault V2 does happens in these contracts, on Robinhood Chain (4663).
+              They are deployed once and reused by every launch — the only thing created per token
+              is a small vault of your chosen template.
             </p>
-            <ContractTable contracts={PONSVAULT_CONTRACTS} />
+            <ContractTable contracts={[...PONSVAULT_V2_CONTRACTS]} />
             <p>
               Your own vault&apos;s address is shown on your token&apos;s page, and is also readable
               from the launcher by calling <code>vaultOf</code> with your token address. The source
@@ -156,7 +158,7 @@ export default function DocsPage() {
             <p>
               These belong to pons and the chain. PonsVault calls them and cannot change them.
             </p>
-            <ContractTable contracts={UPSTREAM_CONTRACTS} />
+            <ContractTable contracts={[...PONS_V2_UPSTREAM_CONTRACTS]} />
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">

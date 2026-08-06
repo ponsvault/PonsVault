@@ -5,6 +5,7 @@ import {
   isAddress,
   keccak256,
   parseEther,
+  parseUnits,
   toHex,
   type Hash,
   type Hex,
@@ -21,6 +22,8 @@ import {
 } from './constants';
 import { computeMaxDevBuyWei, formatMaxDevBuyEth } from './max-dev-buy';
 import type { LaunchFormInput, PonsLaunchMetadata, PonsLaunchpadStatus } from './types';
+import { findV2PairToken } from './v2-deployments';
+import { validateV2VaultInput } from './v2-vault';
 import { validateVaultInput } from './vault';
 
 const TOKEN_NAME_RE = /^[A-Za-z0-9 ]+$/;
@@ -175,6 +178,26 @@ export function validateLaunchInput(
   }
   if (!isValidWebsiteUrl(input.website)) {
     return 'Website must be a valid http(s) URL.';
+  }
+
+  // v2 launches carry a pair token; their vault config and launch gate differ from v1.
+  if (input.pairToken.trim()) {
+    const pair = findV2PairToken(input.pairToken);
+    if (!pair) {
+      return 'Choose an approved pairing asset.';
+    }
+    const vaultError = validateV2VaultInput(input);
+    if (vaultError) return vaultError;
+
+    const initialBuy = input.devBuyEth.trim();
+    if (initialBuy) {
+      try {
+        if (parseUnits(initialBuy, pair.decimals) < 0n) throw new Error('negative');
+      } catch {
+        return `Initial buy must be a valid ${pair.symbol} amount.`;
+      }
+    }
+    return null;
   }
 
   const vaultError = validateVaultInput(input);

@@ -13,10 +13,10 @@ import {
   useSwitchChain,
   useWalletClient,
 } from 'wagmi';
-import { formatUnits, parseEther } from 'viem';
+import { erc20Abi, formatUnits, parseAbi, parseUnits } from 'viem';
 
 import {
-  fetchLaunchpadStatus,
+  fetchV2Status,
   uploadTokenImage,
   verifyLaunchedToken,
 } from '@/lib/pons/api';
@@ -24,17 +24,10 @@ import { robinhoodChain } from '@/lib/pons/chain';
 import { ROBINHOOD_RPC_URL } from '@/lib/pons/constants';
 import {
   PONS_CHAIN_ID,
-  PONS_FACTORY,
   TOKEN_NAME_MAX_LENGTH,
   TOKEN_SYMBOL_MAX_LENGTH,
 } from '@/lib/pons/constants';
 import {
-  buildLaunchMetadata,
-  computeLaunchValue,
-  encodeLaunchTransaction,
-  extractLaunchedToken,
-  formatMaxDevBuyEth,
-  generateLaunchSalt,
   isValidIpfsUri,
   isValidTelegramHandle,
   isValidTokenName,
@@ -42,28 +35,33 @@ import {
   isValidWebsiteUrl,
   isValidEthAddress,
   isValidXHandle,
-  normalizeEthAddress,
+  normalizeTelegram,
+  normalizeTokenName,
+  normalizeTokenSymbol,
+  normalizeTwitter,
   validateLaunchInput,
 } from '@/lib/pons/launch';
-import { computeMaxDevBuyWei } from '@/lib/pons/max-dev-buy';
 import {
   BUYBACK_BURN_DEFAULTS,
   LOTTERY_DEFAULTS,
   RWA_DEFAULTS,
   STAKING_DEFAULTS,
-  STAKING_MAX_LOCK_DAYS,
   VAULT_TEMPLATES,
-  encodeLaunchWithVaultTransaction,
-  extractVaultLaunch,
-  isVaultLauncherDeployed,
-  validateVaultInput,
-  vaultLauncherAddress,
   type VaultTemplateId,
 } from '@/lib/pons/vault';
+import { PONS_V2_PAIR_TOKENS, isV2VaultLauncherDeployed } from '@/lib/pons/v2-deployments';
+import { defaultV2PairAddress } from '@/lib/pons/v2-status';
+import {
+  encodeLaunchWithV2VaultTransaction,
+  extractV2VaultLaunch,
+  isV2VaultTemplate,
+  validateV2VaultInput,
+  v2VaultLauncherAddress,
+} from '@/lib/pons/v2-vault';
 import type { LaunchFormInput } from '@/lib/pons/types';
-import { cn, ipfsToGateway, shortAddress } from '@/lib/utils';
+import { cn, ipfsToGateway } from '@/lib/utils';
 
-const vaultsAvailable = isVaultLauncherDeployed();
+const vaultsAvailable = isV2VaultLauncherDeployed();
 
 const emptyForm: LaunchFormInput = {
   name: '',
@@ -74,6 +72,8 @@ const emptyForm: LaunchFormInput = {
   telegram: '',
   website: '',
   devBuyEth: '',
+  pairToken: PONS_V2_PAIR_TOKENS[0].address,
+  creatorTaxBps: '0',
   vaultTemplate: vaultsAvailable ? 'buyback-burn' : 'none',
   vaultBurnPercent: BUYBACK_BURN_DEFAULTS.burnPercent,
   vaultTreasury: '',
@@ -84,39 +84,7 @@ const emptyForm: LaunchFormInput = {
   vaultLotteryRevealMinutes: LOTTERY_DEFAULTS.revealMinutes,
 };
 
-/** One entry of /api/rwa/assets: a curated stock, measured against the chain now. */
-interface RwaAssetOption {
-  symbol: string;
-  name: string;
-  address: string;
-  poolFee: number;
-  decimals: number;
-  perRound: string;
-  impactBps: number;
-  tradeable: boolean;
-  /** The check could not be run, which is not the same as an unusable pool. */
-  unknown: boolean;
-  reason: string | null;
-}
-
-interface RwaAvailability {
-  registered: boolean;
-  /** False when part of the answer came from a chain we could not read. */
-  complete: boolean;
-  assets: RwaAssetOption[];
-}
-
 const GAS_BUFFER = 50_000_000_000_000n;
-
-function parseDevBuyWei(value: string): bigint {
-  const trimmed = value.trim();
-  if (!trimmed) return 0n;
-  try {
-    return parseEther(trimmed);
-  } catch {
-    return -1n;
-  }
-}
 
 export function LaunchForm() {
   const { address, isConnected, chainId } = useAccount();
@@ -139,48 +107,31 @@ export function LaunchForm() {
   const router = useRouter();
 
   const { data: status, isLoading: statusLoading } = useQuery({
-    queryKey: ['launchpad-status'],
-    queryFn: fetchLaunchpadStatus,
+    queryKey: ['v2-status'],
+    queryFn: fetchV2Status,
     refetchInterval: 60_000,
   });
 
-  // Whether the RWA Dividend template can be launched, and into which stocks,
-  // are both facts about the chain rather than this build: the template needs a
-  // registered factory, and a stock is only worth picking while its pool is
-  // deep enough. Asked here so the picker reflects what would actually happen.
-  const { data: rwa, isLoading: rwaLoading } = useQuery<RwaAvailability>({
-    queryKey: ['rwa-assets'],
-    queryFn: async () => {
-      const response = await fetch('/api/rwa/assets');
-      // Rejecting rather than returning an empty answer. Handing back
-      // "registered: false" here would be recorded as a successful result and
-      // cached, so a moment of RPC trouble would hide the template until the
-      // page was reloaded — and look identical to the template not existing.
-      if (!response.ok) throw new Error('Could not check which stocks are available.');
-      return response.json();
-    },
-    // `complete: false` means the chain could not be read, which is worth
-    // asking about again shortly. A complete answer is left alone.
-    refetchInterval: (query) => (query.state.data?.complete === false ? 5_000 : false),
-    staleTime: 60_000,
-  });
+  const approvedPairs = useMemo(() => {
+    if (!status) {
+      return PONS_V2_PAIR_TOKENS.map((p) => ({
+        ...p,
+        approved: true,
+        phantomQuote: '0',
+        graduationThreshold: '0',
+      }));
+    }
+    return status.pairTokens.filter((p) => p.approved);
+  }, [status]);
 
-  const rwaAssets = useMemo(() => rwa?.assets ?? [], [rwa]);
-  const rwaTradeable = useMemo(() => rwaAssets.filter((a) => a.tradeable), [rwaAssets]);
-  const rwaAvailable = Boolean(rwa?.registered) && rwaTradeable.length > 0;
-  /** The answer is missing rather than negative, so it is still being fetched. */
-  const rwaUnknown = rwa !== undefined && !rwa.complete;
-
-  const { data: lotteryStatus, isLoading: lotteryLoading } = useQuery<{ registered: boolean }>({
-    queryKey: ['lottery-status'],
-    queryFn: async () => {
-      const response = await fetch('/api/lottery/status');
-      if (!response.ok) throw new Error('Could not check lottery registration.');
-      return response.json();
-    },
-    staleTime: 60_000,
-  });
-  const lotteryAvailable = Boolean(lotteryStatus?.registered);
+  const selectedPair = useMemo(() => {
+    const address = form.pairToken || defaultV2PairAddress(status);
+    return (
+      approvedPairs.find((p) => p.address.toLowerCase() === address.toLowerCase()) ??
+      approvedPairs[0] ??
+      PONS_V2_PAIR_TOKENS[0]
+    );
+  }, [approvedPairs, form.pairToken, status]);
 
   const uploadMutation = useMutation({
     mutationFn: uploadTokenImage,
@@ -199,13 +150,9 @@ export function LaunchForm() {
   });
 
   const onWrongChain = isConnected && chainId !== PONS_CHAIN_ID;
-  const maxDevBuyEth = status ? formatMaxDevBuyEth(status) : null;
-  const maxDevBuyWei = status ? computeMaxDevBuyWei(status) : 0n;
-  const devBuyWei = parseDevBuyWei(form.devBuyEth);
-  const totalCostWei = status ? computeLaunchValue(status, form.devBuyEth) : 0n;
-  const devBuyTooHigh = maxDevBuyWei > 0n && devBuyWei > maxDevBuyWei;
+  const launchFeeWei = status ? BigInt(status.launchFeeWei) : 0n;
   const hasEnoughEth =
-    !isConnected || (balance?.value ?? 0n) >= totalCostWei + GAS_BUFFER;
+    !isConnected || (balance?.value ?? 0n) >= launchFeeWei + GAS_BUFFER;
 
   const hasValidImage = isValidIpfsUri(form.imageUri);
   const hasValidDetails =
@@ -215,12 +162,9 @@ export function LaunchForm() {
     isValidTelegramHandle(form.telegram) &&
     isValidWebsiteUrl(form.website);
 
-  const validationError = useMemo(
-    () => validateLaunchInput(form, status),
-    [form, status],
-  );
+  const validationError = useMemo(() => validateLaunchInput(form, undefined), [form]);
 
-  const vaultConfigError = useMemo(() => validateVaultInput(form), [form]);
+  const vaultConfigError = useMemo(() => validateV2VaultInput(form), [form]);
 
   const burnSharePercent = Number(form.vaultBurnPercent);
   const treasuryInvalid =
@@ -229,18 +173,16 @@ export function LaunchForm() {
     form.vaultTreasury.trim().length > 0 &&
     !isValidEthAddress(form.vaultTreasury);
 
-  const lockDaysLabel = useMemo(() => {
-    const days = Number(form.vaultStakingLockDays || '0');
-    if (!Number.isFinite(days) || days < 0) return 'Zero or more.';
-    if (days === 0) return 'No lock — stakers can withdraw whenever they want.';
-    if (days > STAKING_MAX_LOCK_DAYS) return `At most ${STAKING_MAX_LOCK_DAYS} days.`;
-    return `Withdrawals open ${days === 1 ? 'a day' : `${days} days`} after a deposit. Rewards stay claimable throughout.`;
-  }, [form.vaultStakingLockDays]);
-
-  const selectedRwaAsset = useMemo(
-    () => rwaAssets.find((a) => a.address.toLowerCase() === form.vaultRwaAsset.toLowerCase()),
-    [rwaAssets, form.vaultRwaAsset],
-  );
+  const graduationLabel = useMemo(() => {
+    if (!selectedPair || !('graduationThreshold' in selectedPair)) return '—';
+    try {
+      const raw = BigInt(selectedPair.graduationThreshold || '0');
+      if (raw === 0n) return '—';
+      return `${formatUnits(raw, selectedPair.decimals)} ${selectedPair.symbol}`;
+    } catch {
+      return '—';
+    }
+  }, [selectedPair]);
 
   const selectedVault = VAULT_TEMPLATES.find((entry) => entry.id === form.vaultTemplate);
 
@@ -278,18 +220,17 @@ export function LaunchForm() {
     if (vaultConfigError) {
       return { label: 'Check vault settings', disabled: true, mode: 'launch' as const, blocked: true };
     }
-    if (devBuyTooHigh) {
-      return { label: 'Developer buy too high', disabled: true, mode: 'launch' as const, blocked: true };
-    }
-    if (status && !status.launchEnabled) {
+    if (status && !status.publicReady && !status.vaultCanLaunch) {
       return { label: 'Launches not open yet', disabled: true, mode: 'launch' as const, blocked: true };
+    }
+    if (status && !status.vaultCanLaunch) {
+      return { label: 'Vault launcher not ready', disabled: true, mode: 'launch' as const, blocked: true };
     }
     if (!hasEnoughEth) {
       return { label: 'Insufficient ETH', disabled: true, mode: 'launch' as const, blocked: true };
     }
     return { label: 'Launch token', disabled: false, mode: 'launch' as const, blocked: false };
   }, [
-    devBuyTooHigh,
     hasEnoughEth,
     hasValidDetails,
     hasValidImage,
@@ -348,7 +289,17 @@ export function LaunchForm() {
       return;
     }
 
-    const validation = validateLaunchInput(form, status);
+    if (!isV2VaultTemplate(form.vaultTemplate)) {
+      setError('Choose an available vault template.');
+      return;
+    }
+
+    const launchForm: LaunchFormInput = {
+      ...form,
+      pairToken: selectedPair.address,
+    };
+
+    const validation = validateLaunchInput(launchForm, undefined);
     if (validation) {
       setError(validation);
       return;
@@ -357,29 +308,33 @@ export function LaunchForm() {
     setIsLaunching(true);
     setStatusText('Preparing transaction…');
 
-    const withVault = form.vaultTemplate !== 'none';
-
     try {
-      // With a vault, the launcher becomes the token's deployer and fee wallet so
-      // it can re-point the locker's redirect at the vault; without one, fees
-      // stay with the launching wallet.
-      const metadata = buildLaunchMetadata(
-        form,
-        address,
-        withVault ? vaultLauncherAddress() : undefined,
+      const name = normalizeTokenName(launchForm.name);
+      const symbol = normalizeTokenSymbol(launchForm.symbol);
+      const socials = {
+        twitter: normalizeTwitter(launchForm.twitter),
+        telegram: normalizeTelegram(launchForm.telegram),
+        discord: '',
+        website: launchForm.website.trim(),
+        farcaster: '',
+      };
+      const creatorTaxBps = Math.min(
+        Math.max(0, Math.round(Number(launchForm.creatorTaxBps || '0'))),
+        status.maxCreatorTaxBps,
       );
-      const value = computeLaunchValue(status, form.devBuyEth);
-      const salt = generateLaunchSalt(metadata.symbol);
 
-      const data = withVault
-        ? encodeLaunchWithVaultTransaction(metadata, form, salt)
-        : encodeLaunchTransaction(metadata, status, form.devBuyEth, salt);
+      const data = encodeLaunchWithV2VaultTransaction(launchForm, socials, {
+        name,
+        symbol,
+        creatorTaxBps,
+      });
+      const value = BigInt(status.launchFeeWei);
 
       setStatusText('Confirm in your wallet…');
       const hash = await walletClient.sendTransaction({
         account: address,
         chain: robinhoodChain,
-        to: withVault ? vaultLauncherAddress() : PONS_FACTORY,
+        to: v2VaultLauncherAddress(),
         value,
         data,
       });
@@ -392,18 +347,53 @@ export function LaunchForm() {
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
-      const vaultLaunch = withVault ? extractVaultLaunch(receipt) : null;
-      const token = vaultLaunch?.token ?? extractLaunchedToken(receipt);
+      const vaultLaunch = extractV2VaultLaunch(receipt);
+      const token = vaultLaunch?.token;
+      const curve = vaultLaunch?.curve;
 
       if (!token) {
         throw new Error('Launch transaction confirmed but token address was not found in logs.');
+      }
+
+      // Optional initial buy in the pairing asset (v2 has no ETH top-up on launch).
+      const initialBuyRaw = launchForm.devBuyEth.trim();
+      if (initialBuyRaw && curve) {
+        const quoteIn = parseUnits(initialBuyRaw, selectedPair.decimals);
+        if (quoteIn > 0n) {
+          const pair = selectedPair.address as `0x${string}`;
+          const curveBuyAbi = parseAbi([
+            'function buy(uint256 quoteIn, uint256 minTokensOut, address recipient) returns (uint256)',
+          ]);
+
+          setStatusText(`Approve ${selectedPair.symbol} for initial buy…`);
+          const approveHash = await walletClient.writeContract({
+            account: address,
+            chain: robinhoodChain,
+            address: pair,
+            abi: erc20Abi,
+            functionName: 'approve',
+            args: [curve, quoteIn],
+          });
+          await publicClient.waitForTransactionReceipt({ hash: approveHash });
+
+          setStatusText(`Buying with ${selectedPair.symbol}…`);
+          const buyHash = await walletClient.writeContract({
+            account: address,
+            chain: robinhoodChain,
+            address: curve,
+            abi: curveBuyAbi,
+            functionName: 'buy',
+            args: [quoteIn, 0n, address],
+          });
+          await publicClient.waitForTransactionReceipt({ hash: buyHash });
+        }
       }
 
       setStatusText('Registering with pons indexer…');
       try {
         await verifyLaunchedToken(token);
       } catch {
-        // Non-fatal.
+        // Non-fatal — pons indexer may not index v2 yet.
       }
 
       await fetch('/api/launches/record', {
@@ -411,14 +401,12 @@ export function LaunchForm() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           token,
-          name: metadata.name,
-          symbol: metadata.symbol,
-          description: metadata.description,
-          logo: metadata.logo,
+          name,
+          symbol,
+          description: launchForm.description.trim(),
+          logo: launchForm.imageUri.trim(),
           deployer: address,
-          // On a vault launch the locker pays the vault, so that is what the
-          // record's fee wallet has to be for on-chain verification to pass.
-          feeWallet: vaultLaunch?.vault ?? metadata.feeWallet,
+          feeWallet: vaultLaunch.vault,
           transactionHash: hash,
           launchedAt: new Date().toISOString(),
         }),
@@ -435,11 +423,6 @@ export function LaunchForm() {
     }
   }
 
-  function setMaxDevBuy() {
-    if (!maxDevBuyEth) return;
-    setForm((f) => ({ ...f, devBuyEth: maxDevBuyEth }));
-  }
-
   const uploadLabel = uploadMutation.isPending
     ? 'Uploading image…'
     : previewUrl
@@ -452,7 +435,13 @@ export function LaunchForm() {
     <div className="split-shell float launchpad-create-shell">
       <div className="split-shell-form launchpad-create-form">
         <header className="launchpad-create-header">
-          <h2 className="split-shell-title">Launch token</h2>
+          <div className="launchpad-create-heading">
+            <h2 className="split-shell-title">Launch token</h2>
+            <span className="pv-badge pv-badge-live">PonsVault V2</span>
+          </div>
+          <p className="launchpad-field-note">
+            Deploys through the open pons v2 factory with a vault attached to creator fees.
+          </p>
         </header>
 
         <div className="launchpad-form">
@@ -602,6 +591,35 @@ export function LaunchForm() {
           </label>
 
           <div className="launchpad-field launchpad-field-wide">
+            <span className="launchpad-label">Pairing asset</span>
+            <p className="launchpad-field-note">
+              Buyers spend this asset on the curve, and creator fees arrive in it. Native ETH is
+              not open yet.
+            </p>
+            <div className="vault-picker" role="radiogroup" aria-label="Pairing asset">
+              {approvedPairs.map((pair) => {
+                const selected =
+                  selectedPair.address.toLowerCase() === pair.address.toLowerCase();
+                return (
+                  <button
+                    key={pair.address}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => setForm((f) => ({ ...f, pairToken: pair.address }))}
+                    className={cn('vault-option', selected && 'is-selected')}
+                  >
+                    <span className="vault-option-head">
+                      <span className="vault-option-name">{pair.symbol}</span>
+                    </span>
+                    <span className="vault-option-tagline">{pair.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="launchpad-field launchpad-field-wide">
             <span className="launchpad-label">Vault</span>
             <p className="launchpad-field-note">
               Decides what happens to this token&apos;s creator fees. Fixed at launch —{' '}
@@ -613,21 +631,10 @@ export function LaunchForm() {
 
             <div className="vault-picker" role="radiogroup" aria-label="Vault template">
               {VAULT_TEMPLATES.map((template) => {
-                // Templates that answer to the registry stay unselectable until
-                // their factory is registered (and for RWA, until a stock is
-                // deep enough to buy).
-                const gatedOnChain = template.id === 'rwa' || template.id === 'lottery';
-                const chainReady =
-                  template.id === 'rwa'
-                    ? rwaAvailable
-                    : template.id === 'lottery'
-                      ? lotteryAvailable
-                      : true;
-                const checking =
-                  (template.id === 'rwa' && (rwaLoading || rwaUnknown)) ||
-                  (template.id === 'lottery' && lotteryLoading);
                 const selectable =
-                  template.status === 'available' && vaultsAvailable && (!gatedOnChain || chainReady);
+                  template.status === 'available' &&
+                  vaultsAvailable &&
+                  isV2VaultTemplate(template.id);
                 const selected = form.vaultTemplate === template.id;
 
                 return (
@@ -644,8 +651,6 @@ export function LaunchForm() {
                       <span className="vault-option-name">{template.name}</span>
                       {template.status === 'soon' ? (
                         <span className="pv-badge">Soon</span>
-                      ) : checking ? (
-                        <span className="pv-badge">Checking</span>
                       ) : !selectable ? (
                         <span className="pv-badge">Not deployed</span>
                       ) : null}
@@ -675,7 +680,7 @@ export function LaunchForm() {
                   </span>
                   <p className="launchpad-field-note">
                     {burnSharePercent >= 100
-                      ? 'Everything is burned. No treasury needed.'
+                      ? '100% burn needs a buyback helper that is not live yet — leave a treasury share.'
                       : `${(100 - burnSharePercent).toFixed(burnSharePercent % 1 === 0 ? 0 : 2)}% goes to the treasury.`}
                   </p>
                 </label>
@@ -701,10 +706,8 @@ export function LaunchForm() {
                     )}
                   >
                     {treasuryInvalid
-                      ? 'Enter a valid address, or set the burn share to 100%.'
-                      : burnSharePercent >= 100
-                        ? 'Unused while everything is burned.'
-                        : 'Receives whatever is not burned.'}
+                      ? 'Enter a valid address for the unburned share.'
+                      : 'Receives whatever is not burned.'}
                   </p>
                 </label>
               </div>
@@ -736,7 +739,9 @@ export function LaunchForm() {
 
                     <div className="vault-config-row">
                       <label className="launchpad-field">
-                        <span className="launchpad-label">Minimum fees before a run (ETH)</span>
+                        <span className="launchpad-label">
+                          Minimum fees before a run ({selectedPair.symbol})
+                        </span>
                         <input
                           className="launchpad-input"
                           inputMode="decimal"
@@ -746,8 +751,8 @@ export function LaunchForm() {
                           }
                         />
                         <p className="launchpad-field-note">
-                          The vault waits until this much has built up, then buys. Set it higher and
-                          it buys less often in bigger amounts.
+                          The vault waits until this much {selectedPair.symbol} has built up, then
+                          buys. Set it higher and it buys less often in bigger amounts.
                         </p>
                       </label>
                     </div>
@@ -761,30 +766,15 @@ export function LaunchForm() {
           {form.vaultTemplate === 'staking' ? (
             <div className="launchpad-field launchpad-field-wide vault-config">
               <p className="launchpad-field-note">
-                Holders who stake earn the creator fees in WETH, split by how much they have
-                staked. Nothing is minted and no supply is burned — stakers are paid the fees the
-                pool actually generates.
+                Holders who stake earn the creator fees in {selectedPair.symbol}, split by how much
+                they have staked. Nothing is minted and no supply is burned.
               </p>
 
               <div className="vault-config-row">
                 <label className="launchpad-field">
-                  <span className="launchpad-label">Lock period (days)</span>
-                  <input
-                    className="launchpad-input"
-                    inputMode="decimal"
-                    value={form.vaultStakingLockDays}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, vaultStakingLockDays: e.target.value }))
-                    }
-                    aria-label="Days a stake is locked before it can be withdrawn"
-                  />
-                  <p className="launchpad-field-note">
-                    {lockDaysLabel}
-                  </p>
-                </label>
-
-                <label className="launchpad-field">
-                  <span className="launchpad-label">Minimum fees before a payout (ETH)</span>
+                  <span className="launchpad-label">
+                    Minimum fees before a payout ({selectedPair.symbol})
+                  </span>
                   <input
                     className="launchpad-input"
                     inputMode="decimal"
@@ -794,136 +784,8 @@ export function LaunchForm() {
                     }
                   />
                   <p className="launchpad-field-note">
-                    The vault waits until this much has built up, then pays out. Set it higher and
-                    stakers are paid less often in bigger amounts.
-                  </p>
-                </label>
-              </div>
-            </div>
-          ) : null}
-
-          {form.vaultTemplate === 'lottery' ? (
-            <div className="launchpad-field launchpad-field-wide vault-config">
-              <p className="launchpad-field-note">
-                Fees fill a prize pot. When the floor is hit, a round opens — holders enter, then
-                a commit–reveal draw pays the whole pot to one wallet. Token-side fees are burned.
-              </p>
-
-              <div className="vault-config-row">
-                <label className="launchpad-field">
-                  <span className="launchpad-label">Entry window (hours)</span>
-                  <input
-                    className="launchpad-input"
-                    inputMode="decimal"
-                    value={form.vaultLotteryEntryHours}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, vaultLotteryEntryHours: e.target.value }))
-                    }
-                  />
-                  <p className="launchpad-field-note">
-                    How long holders have to Enter after a pot opens. Fixed forever once you launch.
-                  </p>
-                </label>
-
-                <label className="launchpad-field">
-                  <span className="launchpad-label">Reveal delay (minutes)</span>
-                  <input
-                    className="launchpad-input"
-                    inputMode="decimal"
-                    value={form.vaultLotteryRevealMinutes}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, vaultLotteryRevealMinutes: e.target.value }))
-                    }
-                  />
-                  <p className="launchpad-field-note">
-                    Wait between locking the draw and paying the winner — stops the operator
-                    picking a seed after seeing who entered.
-                  </p>
-                </label>
-              </div>
-
-              <div className="vault-config-row">
-                <label className="launchpad-field">
-                  <span className="launchpad-label">Minimum fees before a round (ETH)</span>
-                  <input
-                    className="launchpad-input"
-                    inputMode="decimal"
-                    value={form.vaultMinHarvestEth}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, vaultMinHarvestEth: e.target.value }))
-                    }
-                  />
-                  <p className="launchpad-field-note">
-                    The vault waits until this much has built up, then opens a raffle over the pot.
-                  </p>
-                </label>
-              </div>
-            </div>
-          ) : null}
-
-          {form.vaultTemplate === 'rwa' ? (
-            <div className="launchpad-field launchpad-field-wide vault-config">
-              <p className="launchpad-field-note">
-                Fees buy a tokenized stock, which the vault holds until holders claim it. Holders
-                earn simply by holding — there is nothing to stake and nothing to opt into. The
-                token side of the fees is burned.
-              </p>
-
-              <div className="launchpad-field">
-                <span className="launchpad-label">Stock the fees buy</span>
-                <div className="rwa-asset-picker" role="radiogroup" aria-label="Tokenized stock">
-                  {rwaAssets.map((asset) => {
-                    const selected =
-                      form.vaultRwaAsset.toLowerCase() === asset.address.toLowerCase();
-
-                    return (
-                      <button
-                        key={asset.address}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        disabled={!asset.tradeable}
-                        onClick={() => setForm((f) => ({ ...f, vaultRwaAsset: asset.address }))}
-                        className={cn('rwa-asset-option', selected && 'is-selected')}
-                      >
-                        <span className="rwa-asset-head">
-                          <span className="rwa-asset-symbol">{asset.symbol}</span>
-                          {!asset.tradeable ? <span className="pv-badge">Unavailable</span> : null}
-                        </span>
-                        <span className="rwa-asset-name">{asset.name}</span>
-                        {asset.tradeable ? (
-                          <span className="rwa-asset-rate">
-                            {formatUnits(BigInt(asset.perRound), asset.decimals).slice(0, 8)}{' '}
-                            {asset.symbol} per {form.vaultMinHarvestEth || '0.025'} ETH
-                          </span>
-                        ) : (
-                          <span className="rwa-asset-rate">{asset.reason}</span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="launchpad-field-note">
-                  {selectedRwaAsset
-                    ? `Fixed forever once this launches — the vault can never be pointed at a different stock.`
-                    : 'Pick one. This can never be changed after launch.'}
-                </p>
-              </div>
-
-              <div className="vault-config-row">
-                <label className="launchpad-field">
-                  <span className="launchpad-label">Minimum fees before a purchase (ETH)</span>
-                  <input
-                    className="launchpad-input"
-                    inputMode="decimal"
-                    value={form.vaultMinHarvestEth}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, vaultMinHarvestEth: e.target.value }))
-                    }
-                  />
-                  <p className="launchpad-field-note">
-                    The vault waits until this much has built up, then buys the stock and opens a
-                    round holders can claim from.
+                    The vault waits until this much {selectedPair.symbol} has built up, then pays
+                    out. Set it higher and stakers are paid less often in bigger amounts.
                   </p>
                 </label>
               </div>
@@ -931,36 +793,27 @@ export function LaunchForm() {
           ) : null}
 
           <div className="launchpad-field launchpad-field-wide">
-            <span className="launchpad-label">Developer buy</span>
-            <div className={cn('launchpad-buy-field', devBuyTooHigh && 'is-invalid')}>
+            <span className="launchpad-label">Initial buy (optional)</span>
+            <div className="launchpad-buy-field">
               <div className="launchpad-buy-entry">
                 <input
                   inputMode="decimal"
                   placeholder="0.00"
                   value={form.devBuyEth}
                   onChange={(e) => setForm((f) => ({ ...f, devBuyEth: e.target.value }))}
-                  aria-label="Developer buy amount in ETH"
+                  aria-label={`Initial buy amount in ${selectedPair.symbol}`}
                 />
-                <span className="launchpad-buy-token">
-                  <img src="/ethereum.svg" alt="" width={18} height={18} className="token-icon" />
-                  ETH
-                </span>
+                <span className="launchpad-buy-token">{selectedPair.symbol}</span>
               </div>
               <div className="launchpad-buy-meta">
                 <span>
-                  {maxDevBuyEth
-                    ? `Max ${maxDevBuyEth} · 5% of supply`
-                    : statusLoading
-                      ? 'Loading max buy…'
-                      : 'Max buy unavailable'}
+                  Bought on the curve right after launch · paid in {selectedPair.symbol}, not ETH
                 </span>
-                {maxDevBuyEth ? (
-                  <button type="button" className="convert-max" onClick={setMaxDevBuy}>
-                    Max
-                  </button>
-                ) : null}
               </div>
             </div>
+            <p className="launchpad-field-note">
+              Requires a second approval + buy after the launch tx. Leave empty to skip.
+            </p>
           </div>
 
           {error ? <div className="launchpad-alert">{error}</div> : null}
@@ -969,7 +822,13 @@ export function LaunchForm() {
         <footer className="launchpad-create-actions">
           <div className="convert-footer">
             <span className="convert-footer-rate">
-              Robinhood, ETH {status?.launchFeeEth ?? '…'} due
+              {statusLoading
+                ? 'Loading fee…'
+                : `Robinhood · ${status?.launchFeeEth ?? '…'} ETH fee${
+                    form.devBuyEth.trim()
+                      ? ` + ${form.devBuyEth.trim()} ${selectedPair.symbol} buy`
+                      : ''
+                  }`}
             </span>
             <span className="convert-footer-fee" title="Estimated network fee">
               <svg
@@ -1042,8 +901,8 @@ export function LaunchForm() {
             </dd>
           </div>
           <div>
-            <dt>Trading fees</dt>
-            <dd>70% creator / 30% protocol</dd>
+            <dt>Paired in</dt>
+            <dd>{selectedPair.symbol}</dd>
           </div>
           <div>
             <dt>Vault</dt>
@@ -1054,9 +913,7 @@ export function LaunchForm() {
               <dt>Creator fees</dt>
               <dd>
                 {Number.isFinite(burnSharePercent)
-                  ? burnSharePercent >= 100
-                    ? '100% burned'
-                    : `${burnSharePercent}% burned / ${100 - burnSharePercent}% treasury`
+                  ? `${burnSharePercent}% burned / ${100 - burnSharePercent}% treasury`
                   : '—'}
               </dd>
             </div>
@@ -1064,45 +921,16 @@ export function LaunchForm() {
           {form.vaultTemplate === 'staking' ? (
             <div>
               <dt>Creator fees</dt>
-              <dd>
-                Paid to stakers
-                {Number(form.vaultStakingLockDays || '0') > 0
-                  ? ` · ${form.vaultStakingLockDays}d lock`
-                  : ' · no lock'}
-              </dd>
-            </div>
-          ) : null}
-          {form.vaultTemplate === 'rwa' ? (
-            <div>
-              <dt>Creator fees</dt>
-              <dd>
-                {selectedRwaAsset
-                  ? `Buy ${selectedRwaAsset.symbol} · claimable by holders`
-                  : 'Pick a stock'}
-              </dd>
-            </div>
-          ) : null}
-          {form.vaultTemplate === 'lottery' ? (
-            <div>
-              <dt>Creator fees</dt>
-              <dd>
-                Raffle · {form.vaultLotteryEntryHours || '6'}h entry ·{' '}
-                {form.vaultLotteryRevealMinutes || '30'}m reveal
-              </dd>
+              <dd>Paid to stakers in {selectedPair.symbol}</dd>
             </div>
           ) : null}
           <div>
             <dt>Graduation</dt>
-            <dd>
-              <span className="launchpad-preview-eth">
-                {status?.graduationEth ?? '—'}
-                <img src="/ethereum.svg" alt="" width={14} height={14} className="token-icon" />
-              </span>
-            </dd>
+            <dd>{graduationLabel}</dd>
           </div>
           <div>
             <dt>Liquidity</dt>
-            <dd>Locked</dd>
+            <dd>Locked Uniswap v4</dd>
           </div>
         </dl>
       </aside>

@@ -30,8 +30,11 @@ export function SiteHeader() {
     <header className={cn('nav', scrolled && 'is-scrolled')}>
       <div className="nav-inner">
         <div className="nav-left">
-          <Link href="/" className="pv-brand" aria-label="PonsVault home">
+          <Link href="/" className="pv-brand" aria-label="PonsVault V2 home">
             <span className="pv-brand-text">PonsVault</span>
+            <span className="pv-v2-mark" aria-hidden="true">
+              V2
+            </span>
           </Link>
         </div>
 

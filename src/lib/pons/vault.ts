@@ -54,13 +54,13 @@ export const VAULT_TEMPLATES: VaultTemplate[] = [
     id: 'lottery',
     name: 'Lottery',
     tagline: 'Fees fund a raffle. Holders enter, one wallet wins the pot.',
-    status: 'available',
+    status: 'soon',
   },
   {
     id: 'rwa',
     name: 'RWA Dividend',
     tagline: 'Fees buy a tokenized stock. Holders claim their share — no staking needed.',
-    status: 'available',
+    status: 'soon',
   },
 ];
 
@@ -102,6 +102,7 @@ export function vaultLauncherAddress(): `0x${string}` {
  * suggestion; whatever the creator writes is what actually paces the vault.
  */
 export const BUYBACK_BURN_DEFAULTS = {
+  /** Below 100% — v2 buyback helper is not live yet, so 100% burn reverts. */
   burnPercent: '80',
   minHarvestEth: '0.025',
 } as const;

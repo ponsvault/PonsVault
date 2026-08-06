@@ -6,6 +6,8 @@ import { extractLaunchedToken } from '@/lib/pons/launch';
 import { robinhoodPublicClient } from '@/lib/pons/client';
 import { readCreatorFeeRouting } from '@/lib/pons/token-state';
 import { PONSVAULT_LAUNCHER, isVaultLauncherDeployed } from '@/lib/pons/vault';
+import { isV2VaultLauncherDeployed } from '@/lib/pons/v2-deployments';
+import { extractV2VaultLaunch, PONSVAULT_V2_LAUNCHER } from '@/lib/pons/v2-vault';
 
 export async function verifyLaunchRecordOnChain(
   input: Pick<
@@ -33,25 +35,41 @@ export async function verifyLaunchRecordOnChain(
     throw new Error('Token is not registered on the pons factory.');
   }
 
-  // A vault launch goes through PonsVaultLauncher, which becomes the token's
-  // on-chain deployer so that fees can be swept permissionlessly. The creator is
-  // then the transaction sender, which is still asserted below — so recording a
-  // launch you did not send remains impossible.
   const onChainDeployer = resolved.launched.deployer.toLowerCase();
-  const launchedViaVaultLauncher =
-    isVaultLauncherDeployed() && onChainDeployer === PONSVAULT_LAUNCHER.toLowerCase();
 
-  if (!launchedViaVaultLauncher && onChainDeployer !== deployer.toLowerCase()) {
-    throw new Error('Deployer does not match on-chain launch data.');
-  }
+  if (resolved.kind === 'v2') {
+    const viaV2Launcher =
+      isV2VaultLauncherDeployed() &&
+      onChainDeployer === PONSVAULT_V2_LAUNCHER.toLowerCase();
 
-  const routing = await readCreatorFeeRouting(
-    token,
-    resolved.launched.deployer,
-    resolved.factory,
-  );
-  if (routing.creatorPayout.toLowerCase() !== feeWallet.toLowerCase()) {
-    throw new Error('Fee wallet does not match on-chain fee routing.');
+    if (!viaV2Launcher && onChainDeployer !== deployer.toLowerCase()) {
+      throw new Error('Deployer does not match on-chain launch data.');
+    }
+
+    const recipient = resolved.launched.creatorFeeRecipient?.toLowerCase();
+    if (!recipient || recipient !== feeWallet.toLowerCase()) {
+      throw new Error('Fee wallet does not match on-chain creator fee recipient.');
+    }
+  } else {
+    // A vault launch goes through PonsVaultLauncher, which becomes the token's
+    // on-chain deployer so that fees can be swept permissionlessly. The creator is
+    // then the transaction sender, which is still asserted below — so recording a
+    // launch you did not send remains impossible.
+    const launchedViaVaultLauncher =
+      isVaultLauncherDeployed() && onChainDeployer === PONSVAULT_LAUNCHER.toLowerCase();
+
+    if (!launchedViaVaultLauncher && onChainDeployer !== deployer.toLowerCase()) {
+      throw new Error('Deployer does not match on-chain launch data.');
+    }
+
+    const routing = await readCreatorFeeRouting(
+      token,
+      resolved.launched.deployer,
+      resolved.factory,
+    );
+    if (routing.creatorPayout.toLowerCase() !== feeWallet.toLowerCase()) {
+      throw new Error('Fee wallet does not match on-chain fee routing.');
+    }
   }
 
   const [receipt, transaction] = await Promise.all([
@@ -67,9 +85,19 @@ export async function verifyLaunchRecordOnChain(
     throw new Error('Launch transaction sender does not match deployer.');
   }
 
-  const launchedToken = extractLaunchedToken(receipt);
-  if (!launchedToken || launchedToken.toLowerCase() !== token.toLowerCase()) {
-    throw new Error('Launch transaction does not match token address.');
+  if (resolved.kind === 'v2') {
+    const vaultLaunch = extractV2VaultLaunch(receipt);
+    if (vaultLaunch && vaultLaunch.token.toLowerCase() !== token.toLowerCase()) {
+      throw new Error('Launch transaction does not match token address.');
+    }
+    if (vaultLaunch && vaultLaunch.vault.toLowerCase() !== feeWallet.toLowerCase()) {
+      throw new Error('Fee wallet does not match vault address from launch event.');
+    }
+  } else {
+    const launchedToken = extractLaunchedToken(receipt);
+    if (!launchedToken || launchedToken.toLowerCase() !== token.toLowerCase()) {
+      throw new Error('Launch transaction does not match token address.');
+    }
   }
 }
 
