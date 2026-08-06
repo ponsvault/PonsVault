@@ -19,10 +19,12 @@ Parallel v2 stack under `contracts/src/v2/` (does not touch v1):
 | `PonsV2BuybackBurnVault` | Escrow harvest → `IQuoteBuyback` → burn / treasury |
 | `PonsV2StakingVault` | Escrow harvest → pro-rata quote rewards to stakers |
 | `PonsV2CurveBuyback` | `IQuoteBuyback` that buys on the bonding curve (pre-graduation) |
+| `PonsV2RwaVault` | Escrow harvest → quote→WETH→RWA (or direct if same) → merkle rounds |
 | `DeployPonsV2Vault.s.sol` | One-shot deploy script |
 | `WirePonsV2Buyback.s.sol` | Upgrade live factory + set `defaultBuyback` |
+| `RegisterPonsV2Rwa.s.sol` | Deploy RWA factory + register on live registry |
 
-RWA and Lottery v2 ports are deferred; same escrow base applies.
+Lottery v2 port is still deferred; same escrow base applies.
 
 ## Buyback helper
 
@@ -67,9 +69,41 @@ forge test --match-contract PonsV2VaultForkTest -vv
 | PonsV2CurveBuyback | `0x0aC10bAA445A9678F1FA29c515aa44D7513662f1` |
 | Vault impl (upgraded) | `0xC3eb6aB2C79F752a64c65B8Fe3dEA80E166C1884` |
 
+RWA Dividend registered 2026-08-07:
+
+| Piece | Address |
+|---|---|
+| PonsV2RwaVaultFactory | `0xE3Dd55a527D7408d21f6Cc2aA66A488a0177C164` |
+| Beacon | `0x1115f5eB8A3Edd87A12942B8cf2EEBC231ffF2e3` |
+| Vault impl | `0xB7bF92d946711b4cfAC4EBE50056a0eAE837C117` |
+
+## RWA Dividend (v2)
+
+Fees arrive in the pairing asset. `PonsV2RwaVault` routes:
+
+- `quote == rwaAsset` → allocate quote directly (no swap)
+- `quote == WETH` → single-hop WETH → RWA
+- otherwise → Uniswap V3 multihop `quote → WETH → RWA`
+
+Register on the live registry (owner only):
+
+```bash
+cd contracts
+DISTRIBUTOR=0x… forge script script/RegisterPonsV2Rwa.s.sol --rpc-url robinhood --broadcast
+```
+
+Then paste the printed factory address into `src/lib/pons/v2-deployments.ts` (`rwaFactory`).
+
+Fork tests:
+
+```bash
+forge test --match-contract PonsV2RwaVaultForkTest -vv
+```
+
 ## Remaining product work
 
 1. ~~Broadcast `WirePonsV2Buyback.s.sol`~~ (done 2026-08-07)
-2. Ship a Uniswap v4 `IQuoteBuyback` for graduated launches
-3. Port RWA / Lottery templates onto `PonsV2VaultBase`
-4. Token detail / trading UI for v2 curves
+2. ~~Port RWA onto `PonsV2VaultBase`~~ (registered 2026-08-07)
+3. Ship a Uniswap v4 `IQuoteBuyback` for graduated launches
+4. Port Lottery onto `PonsV2VaultBase`
+5. Token detail / trading UI for v2 curves

@@ -60,7 +60,7 @@ export const VAULT_TEMPLATES: VaultTemplate[] = [
     id: 'rwa',
     name: 'RWA Dividend',
     tagline: 'Fees buy a tokenized stock. Holders claim their share — no staking needed.',
-    status: 'soon',
+    status: 'available',
   },
 ];
 

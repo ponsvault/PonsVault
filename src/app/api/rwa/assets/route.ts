@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { vaultTemplateId } from '@/lib/pons/vault';
-import { isTemplateRegistered } from '@/lib/pons/registry';
+import { isV2TemplateRegistered } from '@/lib/pons/registry';
 import { assessAllAssets } from '@/lib/rwa/asset-health';
 
 /**
@@ -29,7 +29,7 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   try {
     const [registered, assets] = await Promise.all([
-      isTemplateRegistered(vaultTemplateId('rwa')),
+      isV2TemplateRegistered(vaultTemplateId('rwa')),
       assessAllAssets(),
     ]);
 

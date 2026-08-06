@@ -86,6 +86,28 @@ const emptyForm: LaunchFormInput = {
 
 const GAS_BUFFER = 50_000_000_000_000n;
 
+/** One entry of /api/rwa/assets: a curated stock, measured against the chain now. */
+interface RwaAssetOption {
+  symbol: string;
+  name: string;
+  address: string;
+  poolFee: number;
+  decimals: number;
+  perRound: string;
+  impactBps: number;
+  tradeable: boolean;
+  /** The check could not be run, which is not the same as an unusable pool. */
+  unknown: boolean;
+  reason: string | null;
+}
+
+interface RwaAvailability {
+  registered: boolean;
+  /** False when part of the answer came from a chain we could not read. */
+  complete: boolean;
+  assets: RwaAssetOption[];
+}
+
 export function LaunchForm() {
   const { address, isConnected, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -111,6 +133,28 @@ export function LaunchForm() {
     queryFn: fetchV2Status,
     refetchInterval: 60_000,
   });
+
+  // Whether RWA can be launched, and into which stocks, are facts about the chain.
+  const { data: rwa, isLoading: rwaLoading } = useQuery<RwaAvailability>({
+    queryKey: ['rwa-assets'],
+    queryFn: async () => {
+      const response = await fetch('/api/rwa/assets');
+      if (!response.ok) throw new Error('Could not check which stocks are available.');
+      return response.json();
+    },
+    refetchInterval: (query) => (query.state.data?.complete === false ? 5_000 : false),
+    staleTime: 60_000,
+  });
+
+  const rwaAssets = useMemo(() => rwa?.assets ?? [], [rwa]);
+  const rwaTradeable = useMemo(() => rwaAssets.filter((a) => a.tradeable), [rwaAssets]);
+  const rwaAvailable = Boolean(rwa?.registered) && rwaTradeable.length > 0;
+  const rwaUnknown = rwa !== undefined && !rwa.complete;
+
+  const selectedRwaAsset = useMemo(
+    () => rwaAssets.find((a) => a.address.toLowerCase() === form.vaultRwaAsset.toLowerCase()),
+    [rwaAssets, form.vaultRwaAsset],
+  );
 
   const approvedPairs = useMemo(() => {
     if (!status) {
@@ -634,10 +678,12 @@ export function LaunchForm() {
 
             <div className="vault-picker" role="radiogroup" aria-label="Vault template">
               {VAULT_TEMPLATES.map((template) => {
+                const gatedOnChain = template.id === 'rwa';
                 const selectable =
                   template.status === 'available' &&
                   vaultsAvailable &&
-                  isV2VaultTemplate(template.id);
+                  isV2VaultTemplate(template.id) &&
+                  (!gatedOnChain || rwaAvailable);
                 const selected = form.vaultTemplate === template.id;
 
                 return (
@@ -654,6 +700,8 @@ export function LaunchForm() {
                       <span className="vault-option-name">{template.name}</span>
                       {template.status === 'soon' ? (
                         <span className="pv-badge">Soon</span>
+                      ) : gatedOnChain && (rwaLoading || rwaUnknown) ? (
+                        <span className="pv-badge">Checking…</span>
                       ) : !selectable ? (
                         <span className="pv-badge">Not deployed</span>
                       ) : null}
@@ -795,6 +843,76 @@ export function LaunchForm() {
             </div>
           ) : null}
 
+          {form.vaultTemplate === 'rwa' ? (
+            <div className="launchpad-field launchpad-field-wide vault-config">
+              <p className="launchpad-field-note">
+                Fees in {selectedPair.symbol} buy a tokenized stock, which holders claim by balance.
+                There is nothing to stake. The token side of the fees is burned.
+              </p>
+
+              <div className="launchpad-field">
+                <span className="launchpad-label">Stock the fees buy</span>
+                <div className="rwa-asset-picker" role="radiogroup" aria-label="Tokenized stock">
+                  {rwaAssets.map((asset) => {
+                    const selected =
+                      form.vaultRwaAsset.toLowerCase() === asset.address.toLowerCase();
+
+                    return (
+                      <button
+                        key={asset.address}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        disabled={!asset.tradeable}
+                        onClick={() => setForm((f) => ({ ...f, vaultRwaAsset: asset.address }))}
+                        className={cn('rwa-asset-option', selected && 'is-selected')}
+                      >
+                        <span className="rwa-asset-head">
+                          <span className="rwa-asset-symbol">{asset.symbol}</span>
+                          {!asset.tradeable ? <span className="pv-badge">Unavailable</span> : null}
+                        </span>
+                        <span className="rwa-asset-name">{asset.name}</span>
+                        {asset.tradeable ? (
+                          <span className="rwa-asset-rate">
+                            {formatUnits(BigInt(asset.perRound), asset.decimals).slice(0, 8)}{' '}
+                            {asset.symbol} per round (WETH depth check)
+                          </span>
+                        ) : (
+                          <span className="rwa-asset-rate">{asset.reason}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="launchpad-field-note">
+                  {selectedRwaAsset
+                    ? 'Fixed forever once this launches — the vault can never be pointed at a different stock.'
+                    : 'Pick one. This can never be changed after launch.'}
+                </p>
+              </div>
+
+              <div className="vault-config-row">
+                <label className="launchpad-field">
+                  <span className="launchpad-label">
+                    Minimum fees before a purchase ({selectedPair.symbol})
+                  </span>
+                  <input
+                    className="launchpad-input"
+                    inputMode="decimal"
+                    value={form.vaultMinHarvestEth}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, vaultMinHarvestEth: e.target.value }))
+                    }
+                  />
+                  <p className="launchpad-field-note">
+                    The vault waits until this much {selectedPair.symbol} has built up, then buys
+                    the stock and opens a round holders can claim from.
+                  </p>
+                </label>
+              </div>
+            </div>
+          ) : null}
+
           <div className="launchpad-field launchpad-field-wide">
             <span className="launchpad-label">Initial buy (optional)</span>
             <div className="launchpad-buy-field">
@@ -925,6 +1043,16 @@ export function LaunchForm() {
             <div>
               <dt>Creator fees</dt>
               <dd>Paid to stakers in {selectedPair.symbol}</dd>
+            </div>
+          ) : null}
+          {form.vaultTemplate === 'rwa' ? (
+            <div>
+              <dt>Creator fees</dt>
+              <dd>
+                {selectedRwaAsset
+                  ? `Buy ${selectedRwaAsset.symbol} for holders`
+                  : 'Buy a stock for holders'}
+              </dd>
             </div>
           ) : null}
           <div>
