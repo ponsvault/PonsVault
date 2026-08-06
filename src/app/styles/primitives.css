@@ -404,6 +404,22 @@
   color: var(--text-primary);
 }
 
+.pv-v2-mark {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 2px;
+  border: 1px solid rgba(212, 252, 80, 0.28);
+  border-radius: var(--radius-xs);
+  background: rgba(212, 252, 80, 0.08);
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
 /* nav links: 13px, muted, no pill container */
 .nav-product-links {
   display: inline-flex;

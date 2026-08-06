@@ -13,17 +13,17 @@ import { ArrowUpRight, Flame } from 'lucide-react';
 
 const CONFIG: [string, string][] = [
   ['Template', 'Buyback & Burn'],
+  ['Pair', 'AAPL'],
   ['Burn share', '80%'],
-  ['Treasury', '20% · 0x2f4a…a91c'],
-  ['Buys every', '0.05 WETH in fees'],
+  ['Buys every', '0.05 AAPL in fees'],
 ];
 
 const ACTIVITY: { time: string; label: string; value: string; burn?: boolean }[] = [
   { time: '12:04', label: 'Burned', value: '1,284,910 PONSV', burn: true },
-  { time: '06:02', label: 'Bought back', value: '0.0391 WETH' },
-  { time: '06:02', label: 'Harvested', value: '0.0489 WETH' },
+  { time: '06:02', label: 'Bought back', value: '0.0391 AAPL' },
+  { time: '06:02', label: 'Harvested', value: '0.0489 AAPL' },
   { time: '00:01', label: 'Burned', value: '902,441 PONSV', burn: true },
-  { time: '18:00', label: 'Treasury paid', value: '0.0098 WETH' },
+  { time: '18:00', label: 'Treasury paid', value: '0.0098 AAPL' },
 ];
 
 export function VaultPanel() {
@@ -82,7 +82,7 @@ export function VaultPanel() {
       <footer className="vault-panel-foot">
         <div className="vault-panel-pending">
           <span className="vault-panel-pending-label">Pending fees</span>
-          <span className="pv-mono vault-panel-pending-value">0.0412 WETH</span>
+          <span className="pv-mono vault-panel-pending-value">0.0412 AAPL</span>
         </div>
         <div className="vault-panel-actions">
           <span className="vault-panel-hint">Callable by anyone</span>

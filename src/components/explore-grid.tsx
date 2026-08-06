@@ -75,7 +75,7 @@ export function ExploreGrid() {
         </span>
         <p className="pv-empty-title">No launches yet</p>
         <p className="pv-empty-body">
-          Nothing has been launched through PonsVault so far. Be the first token with a vault
+          Nothing has been launched through PonsVault V2 so far. Be the first token with a vault
           attached from block one.
         </p>
         <Link href="/launch" className="pv-btn pv-btn-primary">

@@ -23,15 +23,29 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
   const supplyWei = resolved?.launched.supply ?? BigInt(PONS_TOTAL_SUPPLY);
   const factory = resolved?.factory ?? null;
 
+  const isV2 = resolved?.kind === 'v2';
+
   const [market, graduation, trades] = await Promise.all([
     readPoolMarketSnapshot({
       pool: metadata.pool,
       isToken0,
       supplyWei,
-    }),
-    factory
+    }).catch(() => ({
+      priceInWeth: 0,
+      priceUsd: 0,
+      marketCapUsd: 0,
+      fdvUsd: 0,
+      ethUsd: 0,
+    })),
+    // v2 graduation is curve/escrow-based — v1 locker maths do not apply.
+    !isV2 && factory
       ? readGraduationStatus(token, factory)
-      : readGraduationStatus(token),
+      : Promise.resolve({
+          pairedPrincipal: 0n,
+          threshold: 0n,
+          graduated: false,
+          progress: 0,
+        }),
     fetchRecentPoolTrades({
       pool: metadata.pool,
       token,
@@ -62,20 +76,28 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
       functionName: 'deployer',
     }));
 
-  const feeRouting = await readCreatorFeeRouting(
-    token,
-    deployerAddress,
-    factory ?? undefined,
-  ).catch(() => ({
-    protocolSharePercent: 0,
-    creatorSharePercent: 100,
-    feeRedirect: null,
-    creatorPayout: deployerAddress,
-  }));
+  const feeRouting = isV2
+    ? {
+        protocolSharePercent: 0,
+        creatorSharePercent: 100,
+        feeRedirect: resolved?.launched.creatorFeeRecipient ?? null,
+        creatorPayout:
+          resolved?.launched.creatorFeeRecipient ?? deployerAddress,
+      }
+    : await readCreatorFeeRouting(
+        token,
+        deployerAddress,
+        factory ?? undefined,
+      ).catch(() => ({
+        protocolSharePercent: 0,
+        creatorSharePercent: 100,
+        feeRedirect: null,
+        creatorPayout: deployerAddress,
+      }));
 
   const [creatorFees, locker] = await Promise.all([
-    fetchCreatorFees(token).catch(() => null),
-    factory
+    isV2 ? Promise.resolve(null) : fetchCreatorFees(token).catch(() => null),
+    !isV2 && factory
       ? robinhoodPublicClient
           .readContract({
             address: factory,

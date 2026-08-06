@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 import { Inter, Geist_Mono } from 'next/font/google';
 
+import { SiteHeader } from '@/components/site-header';
 import { Providers } from '@/components/providers';
-import { V2Lock } from '@/components/v2-lock';
 
 import './globals.css';
 import './styles/primitives.css';
@@ -11,7 +11,6 @@ import './styles/docs.css';
 import './styles/explore.css';
 import './styles/app-surface.css';
 import './styles/claim.css';
-import './styles/v2-lock.css';
 
 // Variable Inter so the interface can use the 510 weight that reads as "medium but not bold".
 const inter = Inter({
@@ -26,13 +25,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'PonsVault — Launch tokens with a vault attached',
+  title: 'PonsVault V2 — Launch tokens with a vault attached',
   description:
-    'A vault layer for pons launches on Robinhood Chain. Choose what your creator fees do — buy back and burn, fund a lottery, or split to a team — enforced on-chain.',
+    'PonsVault V2 is a vault layer for the open pons v2 factory on Robinhood Chain. Pair against stocks or USDG, attach Buyback & Burn or Staking, and enforce the rule on-chain.',
 };
 
 export default function RootLayout({
-  children: _children,
+  children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
@@ -40,11 +39,12 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="dark"
-      className={`${inter.variable} ${geistMono.variable} h-full antialiased pv-v2-lock-active`}
+      className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full font-sans">
         <Providers>
-          <V2Lock />
+          <SiteHeader />
+          {children}
         </Providers>
       </body>
     </html>

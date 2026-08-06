@@ -105,7 +105,7 @@ export interface TokenDetailResponse {
   };
   launch: {
     factory: string;
-    factoryKind: 'active' | 'legacy';
+    factoryKind: 'active' | 'legacy' | 'v2';
     deployer: string;
     pairedToken: string;
     isToken0: boolean;
@@ -167,6 +167,13 @@ export interface LaunchFormInput {
   telegram: string;
   website: string;
   devBuyEth: string;
+  /**
+   * Quote asset for a v2 launch (approved equity / USDG). Empty on legacy v1
+   * launches that pair against WETH implicitly.
+   */
+  pairToken: string;
+  /** Creator tax in bps for v2 launches (capped by factory.maxCreatorTaxBps). */
+  creatorTaxBps: string;
   /** Which vault template to attach, or 'none' to keep fees in your wallet. */
   vaultTemplate: VaultTemplateId;
   /** Shared by every template, and the only thing pacing a vault. */

@@ -4,8 +4,8 @@ import { ExploreGrid } from '@/components/explore-grid';
 import { Reveal } from '@/components/ui/reveal';
 
 export const metadata: Metadata = {
-  title: 'Explore · PonsVault',
-  description: 'Tokens launched with a PonsVault attached on Robinhood Chain.',
+  title: 'Explore · PonsVault V2',
+  description: 'Tokens launched through PonsVault V2 on the open pons v2 factory.',
 };
 
 export default function ExplorePage() {
@@ -15,12 +15,12 @@ export default function ExplorePage() {
         <div className="pv-shell">
           <Reveal>
             <p className="pv-index">
-              <span className="pv-dot pv-pulse-dot pv-index-dot" />
+              <span className="pv-badge pv-badge-live">V2</span>
               Live on Robinhood Chain
             </p>
             <h1 className="pv-h1 pv-page-title">Explore launches</h1>
             <p className="pv-body pv-measure pv-page-lead">
-              Every token launched through PonsVault, with market data and progress toward
+              Every token launched through PonsVault V2, with market data and progress toward
               graduation. Only launches created here appear — this is not the full pons feed.
             </p>
           </Reveal>

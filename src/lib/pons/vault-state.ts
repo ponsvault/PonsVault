@@ -4,6 +4,8 @@ import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
 import { PONS_RWA_VAULT_ABI } from '@/lib/rwa/abi';
 
 import { PONS_WETH } from './contracts';
+import { isV2VaultLauncherDeployed } from './v2-deployments';
+import { PONSVAULT_V2_LAUNCHER_ABI, v2VaultLauncherAddress } from './v2-vault';
 import { PONSVAULT_LAUNCHER_ABI, isVaultLauncherDeployed, vaultLauncherAddress } from './vault';
 
 const ERC20_BALANCE_ABI = [
@@ -256,6 +258,21 @@ export async function resolveVaultAddress(
   client: PublicClient,
   token: Address,
 ): Promise<Address | null> {
+  // Prefer the v2 launcher — current launches attach vaults there.
+  if (isV2VaultLauncherDeployed()) {
+    try {
+      const vault = await client.readContract({
+        address: v2VaultLauncherAddress(),
+        abi: PONSVAULT_V2_LAUNCHER_ABI,
+        functionName: 'vaultOf',
+        args: [token],
+      });
+      if (vault && vault !== ZERO_ADDRESS) return vault;
+    } catch {
+      // Fall through to v1.
+    }
+  }
+
   if (!isVaultLauncherDeployed()) return null;
 
   const vault = await client.readContract({

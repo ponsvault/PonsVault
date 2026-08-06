@@ -6,9 +6,9 @@ import { LaunchForm } from '@/components/launch-form';
 import { Reveal } from '@/components/ui/reveal';
 
 export const metadata: Metadata = {
-  title: 'Launch a token · PonsVault',
+  title: 'Launch a token · PonsVault V2',
   description:
-    'Launch a fixed-supply token on Robinhood Chain through the pons factory, with a vault attached to its creator fees.',
+    'Launch on the open pons v2 factory with a PonsVault attached — pair against stocks or USDG, choose Buyback & Burn or Staking.',
 };
 
 export default function LaunchPage() {
@@ -23,13 +23,13 @@ export default function LaunchPage() {
 
           <Reveal>
             <p className="pv-index">
-              <span className="pv-index-num">01</span>
-              Launchpad
+              <span className="pv-badge pv-badge-live">V2</span>
+              PonsVault
             </p>
             <h1 className="pv-h1 pv-page-title">Launch your token</h1>
             <p className="pv-body pv-measure pv-page-lead">
-              Fixed supply, deployed through the pons factory on Robinhood Chain. Fill in the
-              details, preview the transaction, and sign from your own wallet.
+              Open pons v2 factory on Robinhood Chain. Pick a pairing asset, attach a vault to your
+              creator fees, and sign from your own wallet.
             </p>
           </Reveal>
         </div>
