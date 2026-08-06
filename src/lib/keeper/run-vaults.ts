@@ -12,12 +12,15 @@ import { robinhoodChain } from '@/lib/pons/chain';
 import { robinhoodPublicClient } from '@/lib/pons/client';
 import { ROBINHOOD_RPC_URL } from '@/lib/pons/constants';
 import { PONSVAULT_DEPLOYMENT } from '@/lib/pons/deployments';
+import { PONS_WETH } from '@/lib/pons/contracts';
 import { PONS_TOKEN_ABI } from '@/lib/pons/token-state';
 import {
   PONSVAULT_LAUNCHER_ABI,
   isVaultLauncherDeployed,
   vaultLauncherAddress,
 } from '@/lib/pons/vault';
+import { PONSVAULT_V2_DEPLOYMENT, isV2VaultLauncherDeployed } from '@/lib/pons/v2-deployments';
+import { PONSVAULT_V2_LAUNCHER_ABI, v2VaultLauncherAddress } from '@/lib/pons/v2-vault';
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from '@/lib/pons/vault-state';
 import { listPonsVaultLaunches } from '@/lib/launch-registry/store';
 import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
@@ -295,25 +298,73 @@ function vaultRunner(vault: Address, template: VaultTemplate, account: Keeper, w
  * full scan stays cheap.
  */
 async function discoverVaultsOnChain(): Promise<VaultRef[]> {
-  if (!isVaultLauncherDeployed()) return [];
+  const found: VaultRef[] = [];
 
+  if (isVaultLauncherDeployed()) {
+    try {
+      const logs = await robinhoodPublicClient.getContractEvents({
+        address: vaultLauncherAddress(),
+        abi: PONSVAULT_LAUNCHER_ABI,
+        eventName: 'Launched',
+        fromBlock: PONSVAULT_DEPLOYMENT.startBlock,
+        toBlock: 'latest',
+      });
+
+      for (const log of logs) {
+        const { token, vault } = log.args;
+        if (!token || !vault) continue;
+        found.push({ token, vault, symbol: '' });
+      }
+    } catch {
+      // A safety net must not become a new way for the whole tick to fail.
+    }
+  }
+
+  if (isV2VaultLauncherDeployed()) {
+    try {
+      const logs = await robinhoodPublicClient.getContractEvents({
+        address: v2VaultLauncherAddress(),
+        abi: PONSVAULT_V2_LAUNCHER_ABI,
+        eventName: 'Launched',
+        fromBlock: PONSVAULT_V2_DEPLOYMENT.startBlock,
+        toBlock: 'latest',
+      });
+
+      for (const log of logs) {
+        const { token, vault } = log.args;
+        if (!token || !vault) continue;
+        found.push({ token, vault, symbol: '' });
+      }
+    } catch {
+      // Same: discovery is best-effort.
+    }
+  }
+
+  return found;
+}
+
+const QUOTE_ASSET_ABI = [
+  {
+    type: 'function',
+    name: 'quoteAsset',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const;
+
+/** True when harvest value is denominated in WETH (v1). v2 quote assets skip ETH gas ratio. */
+async function harvestIsWeth(vault: Address): Promise<boolean> {
   try {
-    const logs = await robinhoodPublicClient.getContractEvents({
-      address: vaultLauncherAddress(),
-      abi: PONSVAULT_LAUNCHER_ABI,
-      eventName: 'Launched',
-      fromBlock: PONSVAULT_DEPLOYMENT.startBlock,
-      toBlock: 'latest',
+    const quote = await robinhoodPublicClient.readContract({
+      address: vault,
+      abi: QUOTE_ASSET_ABI,
+      functionName: 'quoteAsset',
     });
-
-    return logs.flatMap((log) => {
-      const { token, vault } = log.args;
-      if (!token || !vault) return [];
-      return [{ token, vault, symbol: '' }];
-    });
+    return quote.toLowerCase() === PONS_WETH.toLowerCase();
   } catch {
-    // A safety net must not become a new way for the whole tick to fail.
-    return [];
+    // v1 buyback vaults have no quoteAsset() — harvest is WETH.
+    return true;
   }
 }
 
@@ -481,17 +532,18 @@ export async function runDueVaults(options: RunDueVaultsOptions = {}): Promise<K
       continue;
     }
 
-    // WETH is 1:1 with the gas currency, so the two are directly comparable.
-    // Token-side fees ride along on top and only make the trade better, so
-    // leaving them out of the comparison keeps the guard conservative.
-    if (weth < gasCost * BigInt(Math.max(1, Math.round(minValueRatio)))) {
-      outcomes.push({
-        ...ref,
-        status: 'uneconomic',
-        weth: formatEther(weth),
-        gasCost: formatEther(gasCost),
-      });
-      continue;
+    // WETH harvests are 1:1 with the gas currency. v2 vaults harvest AAPL/USDG/etc.,
+    // so an ETH gas ratio would falsely skip every ready vault — skip the gate there.
+    if (await harvestIsWeth(vault)) {
+      if (weth < gasCost * BigInt(Math.max(1, Math.round(minValueRatio)))) {
+        outcomes.push({
+          ...ref,
+          status: 'uneconomic',
+          weth: formatEther(weth),
+          gasCost: formatEther(gasCost),
+        });
+        continue;
+      }
     }
 
     if (options.dryRun) {

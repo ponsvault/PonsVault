@@ -186,6 +186,8 @@ export function validateLaunchInput(
     if (!pair) {
       return 'Choose an approved pairing asset.';
     }
+    // Form passes live buybackHelperReady into validateV2VaultInput separately;
+    // here we only reject structurally bad configs.
     const vaultError = validateV2VaultInput(input);
     if (vaultError) return vaultError;
 

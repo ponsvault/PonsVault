@@ -155,9 +155,13 @@ function parseMinHarvest(input: LaunchFormInput): bigint {
 
 export function buildV2BuybackConfig(input: LaunchFormInput) {
   const burnBps = Math.round(Number(input.vaultBurnPercent) * 100);
+  const treasury =
+    burnBps >= 10_000
+      ? ('0x0000000000000000000000000000000000000000' as const)
+      : (getAddress(input.vaultTreasury.trim()) as `0x${string}`);
   return {
     burnBps,
-    treasury: getAddress(input.vaultTreasury.trim()) as `0x${string}`,
+    treasury,
     minHarvest: parseMinHarvest(input),
   };
 }
@@ -183,10 +187,12 @@ function encodeV2VaultConfig(input: LaunchFormInput): Hex {
 /**
  * Mirrors on-chain vault validation so a bad config fails in the form.
  *
- * 100% burn is rejected until a Uniswap v4 buyback helper is configured on the
- * buyback factory (defaultBuyback is currently address(0)).
+ * 100% burn requires a live `defaultBuyback` on the buyback factory (curve helper).
  */
-export function validateV2VaultInput(input: LaunchFormInput): string | null {
+export function validateV2VaultInput(
+  input: LaunchFormInput,
+  options?: { buybackHelperReady?: boolean },
+): string | null {
   if (!isV2VaultLauncherDeployed()) {
     return 'Vaults are not available on this network yet.';
   }
@@ -211,10 +217,15 @@ export function validateV2VaultInput(input: LaunchFormInput): string | null {
   if (input.vaultTemplate === 'staking') return null;
 
   const burnPercent = Number(input.vaultBurnPercent);
-  if (!Number.isFinite(burnPercent) || burnPercent <= 0 || burnPercent >= 100) {
-    return 'Burn share must be between 0 and 100% (exclusive). 100% burn needs a buyback helper that is not live yet — leave a treasury share.';
+  const helperReady = options?.buybackHelperReady === true;
+
+  if (!Number.isFinite(burnPercent) || burnPercent <= 0 || burnPercent > 100) {
+    return 'Burn share must be between 0 and 100%.';
   }
-  if (!isAddress(input.vaultTreasury.trim(), { strict: false })) {
+  if (burnPercent === 100 && !helperReady) {
+    return '100% burn needs the buyback helper wired on-chain — leave a treasury share for now.';
+  }
+  if (burnPercent < 100 && !isAddress(input.vaultTreasury.trim(), { strict: false })) {
     return 'Enter a treasury address for the unburned share.';
   }
 
