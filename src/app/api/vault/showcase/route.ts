@@ -24,15 +24,23 @@ function formatEthAmount(value: bigint): string {
   return n.toFixed(4);
 }
 
+function ageLabel(ageSeconds: number): string {
+  if (ageSeconds < 0) ageSeconds = 0;
+  if (ageSeconds < 60) return 'just now';
+  if (ageSeconds < 3600) return `${Math.floor(ageSeconds / 60)}m ago`;
+  if (ageSeconds < 86_400) return `${Math.floor(ageSeconds / 3600)}h ago`;
+  const days = Math.floor(ageSeconds / 86_400);
+  return `${days}d ago`;
+}
+
 /**
- * Live stats for the landing-page $VAULT mock.
+ * Live stats for the landing-page $VAULT panel.
  *
- * Lifetime totals come from the vault; the "recent runs" strip is rebuilt from
- * the latest BuybackExecuted / TokensBurned logs so the hero never shows
- * invented PONSV numbers.
+ * Lifetime totals from the vault contract — not inventing "recent runs" from
+ * those same totals when event logs are out of range.
  */
 export async function GET() {
-  const { token, vault, symbol, pairSymbol } = SHOWCASE_VAULT_TOKEN;
+  const { token, symbol, pairSymbol } = SHOWCASE_VAULT_TOKEN;
 
   try {
     const state = await fetchVaultState(robinhoodPublicClient, token);
@@ -40,91 +48,35 @@ export async function GET() {
       return NextResponse.json({ error: 'Showcase vault is not a buyback vault.' }, { status: 503 });
     }
 
-    const latestBlock = await robinhoodPublicClient.getBlockNumber();
-    const fromBlock = latestBlock > 2_000_000n ? latestBlock - 2_000_000n : 0n;
-
-    const [burnLogs, buybackLogs] = await Promise.all([
-      robinhoodPublicClient.getLogs({
-        address: vault,
-        event: {
-          type: 'event',
-          name: 'TokensBurned',
-          inputs: [{ name: 'amount', type: 'uint256', indexed: false }],
-        },
-        fromBlock,
-        toBlock: latestBlock,
-      }),
-      robinhoodPublicClient.getLogs({
-        address: vault,
-        event: {
-          type: 'event',
-          name: 'BuybackExecuted',
-          inputs: [
-            { name: 'wethSpent', type: 'uint256', indexed: false },
-            { name: 'tokensBought', type: 'uint256', indexed: false },
-          ],
-        },
-        fromBlock,
-        toBlock: latestBlock,
-      }),
-    ]);
-
-    const lastBurns = burnLogs.slice(-2).reverse();
-    const lastBuy = buybackLogs.at(-1);
-
-    const recentBlocks = [
-      ...lastBurns.map((l) => l.blockNumber),
-      ...(lastBuy ? [lastBuy.blockNumber] : []),
-    ];
-    const uniqueBlocks = [...new Set(recentBlocks.filter((b): b is bigint => b != null))];
-    const blockTimes = new Map<string, number>();
-    await Promise.all(
-      uniqueBlocks.map(async (bn) => {
-        const block = await robinhoodPublicClient.getBlock({ blockNumber: bn });
-        blockTimes.set(bn.toString(), Number(block.timestamp));
-      }),
-    );
-
     const now = Math.floor(Date.now() / 1000);
-    const runs: {
-      time: string;
-      label: string;
-      value: string;
-      unit: string;
-      burn: boolean;
-    }[] = [];
+    const lastRunAt = Number(state.lastRunAt);
+    const lastRunLabel = lastRunAt > 0 ? ageLabel(now - lastRunAt) : 'never';
 
-    for (const log of lastBurns) {
-      const amount = log.args.amount ?? 0n;
-      const ts = blockTimes.get((log.blockNumber ?? 0n).toString()) ?? now;
-      runs.push({
-        time: relativeClock(now - ts),
+    const rows = [
+      {
         label: 'Burned',
-        value: compactTokenAmount(amount),
+        value: compactTokenAmount(state.totalTokensBurned),
         unit: symbol,
         burn: true,
-      });
-    }
-
-    if (lastBuy) {
-      const spent = lastBuy.args.wethSpent ?? 0n;
-      const ts = blockTimes.get((lastBuy.blockNumber ?? 0n).toString()) ?? now;
-      runs.push({
-        time: relativeClock(now - ts),
-        label: 'Bought',
-        value: formatEthAmount(spent),
+      },
+      {
+        label: 'Harvested',
+        value: formatEthAmount(state.totalWethHarvested),
         unit: pairSymbol,
         burn: false,
-      });
-    }
-
-    const lastBurnAmount = lastBurns[0]?.args.amount ?? 0n;
-    const lastBuySpent = lastBuy?.args.wethSpent ?? 0n;
+      },
+      {
+        label: 'Treasury',
+        value: formatEthAmount(state.totalTreasuryPaid),
+        unit: pairSymbol,
+        burn: false,
+      },
+    ];
 
     return NextResponse.json(
       {
         token,
-        vault,
+        vault: state.vault,
         symbol,
         pairSymbol,
         burnBps: state.burnBps,
@@ -133,18 +85,15 @@ export async function GET() {
         pending: formatEthAmount(state.pendingWeth),
         runCount: state.runCount.toString(),
         totalBurned: compactTokenAmount(state.totalTokensBurned),
-        totalBurnedRaw: state.totalTokensBurned.toString(),
         totalHarvested: formatEthAmount(state.totalWethHarvested),
         totalTreasuryPaid: formatEthAmount(state.totalTreasuryPaid),
         canRun: state.canRun,
-        lastRunAt: Number(state.lastRunAt),
-        runs: runs.slice(0, 3),
+        lastRunAt,
+        lastRunLabel,
+        rows,
         float: {
-          title: state.runCount > 0n ? 'Keeper ran vault' : 'Vault waiting',
-          body:
-            state.runCount > 0n && lastBurnAmount > 0n
-              ? `Burned ${compactTokenAmount(lastBurnAmount)} ${symbol} from ${formatEthAmount(lastBuySpent)} ${pairSymbol}`
-              : `${compactTokenAmount(state.totalTokensBurned)} ${symbol} burned across ${state.runCount.toString()} runs`,
+          title: state.runCount > 0n ? 'Live vault' : 'Vault waiting',
+          body: `${compactTokenAmount(state.totalTokensBurned)} ${symbol} burned · ${state.runCount.toString()} runs · last ${lastRunLabel}`,
         },
         href: `/launchpad/${token}`,
       },
@@ -162,19 +111,4 @@ export async function GET() {
       { status: 503, headers: { 'Cache-Control': 'no-store' } },
     );
   }
-}
-
-/** Compact clock label for the recent-runs strip (matches the mock's HH:MM feel). */
-function relativeClock(ageSeconds: number): string {
-  if (ageSeconds < 0) ageSeconds = 0;
-  if (ageSeconds < 3600) {
-    const m = Math.max(1, Math.floor(ageSeconds / 60));
-    return `${String(m).padStart(2, '0')}:00`;
-  }
-  if (ageSeconds < 86_400) {
-    const h = Math.floor(ageSeconds / 3600);
-    return `${String(h).padStart(2, '0')}:00`;
-  }
-  const d = Math.floor(ageSeconds / 86_400);
-  return `${d}d`;
 }

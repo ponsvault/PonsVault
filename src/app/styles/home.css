@@ -296,7 +296,7 @@
 
 .hero-product-runs li {
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 14px;
   align-items: center;
   padding: 11px 24px;
@@ -304,15 +304,15 @@
   border-top: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.hero-product-runs li > .pv-mono:first-child {
-  color: var(--text-subtle);
-}
-
 .hero-product-run-label {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   color: var(--text-muted);
+}
+
+.hero-product-run-value {
+  text-align: right;
 }
 
 .hero-product-run-label svg {
