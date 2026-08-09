@@ -6,6 +6,7 @@ import { robinhoodPublicClient } from './client';
 import { resolveLaunchedToken } from './factory';
 import { readPoolMarketSnapshot } from './pricing';
 import { fetchRecentPoolTrades, isToken0Ordering } from './trades';
+import { resolveStickyGraduation } from './graduation-sticky';
 import {
   readCreatorFeeRouting,
   readGraduationStatus,
@@ -25,7 +26,7 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
 
   const isV2 = resolved?.kind === 'v2';
 
-  const [market, graduation, trades] = await Promise.all([
+  const [market, rawGraduation, trades] = await Promise.all([
     // v2 bonding curves are not Uniswap v3 pools.
     !isV2 && metadata.pool
       ? readPoolMarketSnapshot({
@@ -65,6 +66,15 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
         }).catch(() => [])
       : Promise.resolve([]),
   ]);
+
+  const graduation = !isV2
+    ? await resolveStickyGraduation({
+        token,
+        status: rawGraduation,
+        pool: metadata.pool,
+        checkPeak: true,
+      })
+    : rawGraduation;
 
   const tradesWithUsd = trades.map((trade) => ({
     ...trade,

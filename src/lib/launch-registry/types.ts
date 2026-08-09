@@ -13,6 +13,8 @@ export interface PonsVaultLaunchRecord {
   vaultTemplate?: VaultTemplateId;
   transactionHash: string;
   launchedAt: string;
+  /** App-side sticky flag — pons factory graduation is not sticky on-chain. */
+  everGraduated?: boolean;
 }
 
 export interface PonsVaultLaunchRegistryFile {

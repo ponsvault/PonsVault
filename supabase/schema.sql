@@ -36,6 +36,8 @@ create table if not exists ponsvault_launches (
                                ),
   transaction_hash   text        not null,
   launched_at        timestamptz not null,
+  -- Sticky: factory graduationStatus can flip false after sells drain WETH.
+  ever_graduated     boolean     not null default false,
   created_at         timestamptz not null default now()
 );
 

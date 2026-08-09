@@ -18,6 +18,7 @@ type ExploreLaunchBase = {
   vaultTemplate: VaultTemplateId | null;
   launchedAt: string;
   transactionHash: string;
+  everGraduated?: boolean;
 };
 
 export async function GET(request: Request) {
@@ -47,6 +48,7 @@ export async function GET(request: Request) {
         vaultTemplate: launch.vaultTemplate,
         launchedAt: launch.launchedAt,
         transactionHash: launch.transactionHash,
+        everGraduated: false,
       });
     }
 
@@ -63,6 +65,7 @@ export async function GET(request: Request) {
         vaultTemplate: launch.vaultTemplate ?? null,
         launchedAt: launch.launchedAt,
         transactionHash: launch.transactionHash,
+        everGraduated: launch.everGraduated ?? false,
       });
     }
 

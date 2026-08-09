@@ -7,6 +7,7 @@ import { robinhoodPublicClient } from './client';
 import { PONS_TOTAL_SUPPLY } from './constants';
 import { resolveLaunchedToken } from './factory';
 import { readPoolMarketSnapshot } from './pricing';
+import { resolveStickyGraduation } from './graduation-sticky';
 import { readGraduationStatus, readTokenOnchainMetadata } from './token-state';
 import { isToken0Ordering } from './trades';
 import type { PonsLaunchRecord, VaultStat } from './types';
@@ -114,7 +115,7 @@ export async function enrichLaunchRecord(
     | 'feeWallet'
     | 'vault'
     | 'vaultTemplate'
-  >,
+  > & { everGraduated?: boolean },
 ): Promise<PonsLaunchRecord> {
   const token = launch.token as Address;
 
@@ -130,7 +131,7 @@ export async function enrichLaunchRecord(
 
     const isV2 = resolved?.kind === 'v2';
 
-    const [market, graduation, vaultStats] = await Promise.all([
+    const [market, rawGraduation, vaultStats] = await Promise.all([
       // v2 curves are not Uniswap v3 pools — skip the v3 snapshot until graduated.
       !isV2 && metadata.pool
         ? readPoolMarketSnapshot({
@@ -166,6 +167,17 @@ export async function enrichLaunchRecord(
           }),
       readVaultStat(launch.vault),
     ]);
+
+    const graduation = !isV2
+      ? await resolveStickyGraduation({
+          token,
+          status: rawGraduation,
+          pool: metadata.pool,
+          everGraduated: launch.everGraduated,
+          // Explore lists many tokens — seed/DB sticky only (peak scan on detail).
+          checkPeak: false,
+        })
+      : rawGraduation;
 
     return {
       ...launch,
@@ -206,7 +218,7 @@ export async function enrichLaunchRecords(
       | 'feeWallet'
       | 'vault'
       | 'vaultTemplate'
-    >
+    > & { everGraduated?: boolean }
   >,
 ): Promise<PonsLaunchRecord[]> {
   return Promise.all(launches.map((launch) => enrichLaunchRecord(launch)));

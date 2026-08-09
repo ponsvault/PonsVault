@@ -160,9 +160,9 @@ export async function readGraduationStatus(
     args: [token],
   });
 
-  // Graduation is sticky on-chain: once true it stays true even if later sells
-  // drain paired WETH below the threshold. Progress must not fall back to ~68%
-  // for a graduated token just because market cap is lower now.
+  // Factory flag tracks *current* paired WETH — it can flip false after sells.
+  // Callers should run resolveStickyGraduation() for sticky UI. Still treat a
+  // live principal ≥ threshold as graduated for this read.
   if (graduated || (threshold > 0n && pairedPrincipal >= threshold)) {
     return {
       pairedPrincipal,

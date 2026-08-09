@@ -19,10 +19,13 @@ type LaunchRow = {
   vault_template: VaultTemplateId | null;
   transaction_hash: string;
   launched_at: string;
+  ever_graduated?: boolean;
 };
 
-const LAUNCH_COLUMNS =
+const LAUNCH_COLUMNS_BASE =
   'token, name, symbol, description, logo, deployer, fee_wallet, vault, vault_template, transaction_hash, launched_at';
+
+const LAUNCH_COLUMNS = `${LAUNCH_COLUMNS_BASE}, ever_graduated`;
 
 function rowToLaunch(row: LaunchRow): PonsVaultLaunchRecord {
   return {
@@ -37,10 +40,12 @@ function rowToLaunch(row: LaunchRow): PonsVaultLaunchRecord {
     vaultTemplate: row.vault_template ?? undefined,
     transactionHash: row.transaction_hash as `0x${string}`,
     launchedAt: row.launched_at,
+    everGraduated: row.ever_graduated ?? false,
   };
 }
 
-function launchToRow(launch: PonsVaultLaunchRecord): LaunchRow {
+/** Upsert payload — never writes ever_graduated (sticky flag is set separately). */
+function launchToRow(launch: PonsVaultLaunchRecord): Omit<LaunchRow, 'ever_graduated'> {
   return {
     token: launch.token.toLowerCase(),
     name: launch.name,
@@ -54,6 +59,10 @@ function launchToRow(launch: PonsVaultLaunchRecord): LaunchRow {
     transaction_hash: launch.transactionHash,
     launched_at: launch.launchedAt,
   };
+}
+
+function isMissingEverGraduatedColumn(message: string): boolean {
+  return /ever_graduated/i.test(message) && /column/i.test(message);
 }
 
 async function ensureRegistry(): Promise<PonsVaultLaunchRegistryFile> {
@@ -77,10 +86,24 @@ export async function recordPonsVaultLaunch(
 ): Promise<PonsVaultLaunchRecord> {
   if (isSupabaseConfigured()) {
     const row = launchToRow(launch);
-    const { data, error } = await supabase
+    const withSticky = await supabase
       .from('ponsvault_launches')
       .upsert(row, { onConflict: 'token' })
       .select(LAUNCH_COLUMNS)
+      .single();
+
+    if (!withSticky.error) {
+      return rowToLaunch(withSticky.data as LaunchRow);
+    }
+
+    if (!isMissingEverGraduatedColumn(withSticky.error.message)) {
+      throw new Error(withSticky.error.message);
+    }
+
+    const { data, error } = await supabase
+      .from('ponsvault_launches')
+      .upsert(row, { onConflict: 'token' })
+      .select(LAUNCH_COLUMNS_BASE)
       .single();
 
     if (error) throw new Error(error.message);
@@ -108,9 +131,23 @@ export async function getPonsVaultLaunchByToken(
   const normalized = token.toLowerCase();
 
   if (isSupabaseConfigured()) {
-    const { data, error } = await supabase
+    const withSticky = await supabase
       .from('ponsvault_launches')
       .select(LAUNCH_COLUMNS)
+      .eq('token', normalized)
+      .maybeSingle();
+
+    if (!withSticky.error) {
+      return withSticky.data ? rowToLaunch(withSticky.data as LaunchRow) : null;
+    }
+
+    if (!isMissingEverGraduatedColumn(withSticky.error.message)) {
+      throw new Error(withSticky.error.message);
+    }
+
+    const { data, error } = await supabase
+      .from('ponsvault_launches')
+      .select(LAUNCH_COLUMNS_BASE)
       .eq('token', normalized)
       .maybeSingle();
 
@@ -126,9 +163,23 @@ export async function getPonsVaultLaunchByToken(
 
 export async function listPonsVaultLaunches(limit = 100): Promise<PonsVaultLaunchRecord[]> {
   if (isSupabaseConfigured()) {
-    const { data, error } = await supabase
+    const withSticky = await supabase
       .from('ponsvault_launches')
       .select(LAUNCH_COLUMNS)
+      .order('launched_at', { ascending: false })
+      .limit(limit);
+
+    if (!withSticky.error) {
+      return (withSticky.data as LaunchRow[]).map(rowToLaunch);
+    }
+
+    if (!isMissingEverGraduatedColumn(withSticky.error.message)) {
+      throw new Error(withSticky.error.message);
+    }
+
+    const { data, error } = await supabase
+      .from('ponsvault_launches')
+      .select(LAUNCH_COLUMNS_BASE)
       .order('launched_at', { ascending: false })
       .limit(limit);
 

@@ -203,7 +203,11 @@ export function TokenTradePanel({ token, symbol, detail }: TokenTradePanelProps)
         </div>
         <div>
           <dt>Graduation</dt>
-          <dd>{detail.graduation.graduated ? 'Graduated' : `${Math.round(detail.graduation.progress * 100)}%`}</dd>
+          <dd>
+            {detail.graduation.graduated
+              ? 'Graduated'
+              : `${Math.round(detail.graduation.progress * 100)}%`}
+          </dd>
         </div>
       </dl>
     </section>
