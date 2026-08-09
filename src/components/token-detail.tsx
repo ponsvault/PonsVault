@@ -134,15 +134,24 @@ export function TokenDetail({ token }: TokenDetailProps) {
 
           <div className="token-detail-progress">
             <div className="token-detail-progress-copy">
-              <span>Graduation progress</span>
+              <span>
+                {data.graduation.graduated ? 'Graduated' : 'Graduation progress'}
+              </span>
               <strong>
-                {data.graduation.pairedPrincipalEth} / {data.graduation.thresholdEth} ETH
+                {data.graduation.graduated
+                  ? 'Threshold reached'
+                  : `${data.graduation.pairedPrincipalEth} / ${data.graduation.thresholdEth} ETH`}
               </strong>
             </div>
             <div className="token-detail-progress-track">
               <div
                 className="token-detail-progress-fill"
-                style={{ width: `${Math.min(data.graduation.progress * 100, 100)}%` }}
+                style={{
+                  width: `${Math.min(
+                    (data.graduation.graduated ? 1 : data.graduation.progress) * 100,
+                    100,
+                  )}%`,
+                }}
               />
             </div>
           </div>

@@ -160,13 +160,26 @@ export async function readGraduationStatus(
     args: [token],
   });
 
+  // Graduation is sticky on-chain: once true it stays true even if later sells
+  // drain paired WETH below the threshold. Progress must not fall back to ~68%
+  // for a graduated token just because market cap is lower now.
+  if (graduated || (threshold > 0n && pairedPrincipal >= threshold)) {
+    return {
+      pairedPrincipal,
+      threshold,
+      graduated: true,
+      progress: 1,
+    };
+  }
+
+  // Bigint ratio — Number(wei) loses precision above 2^53.
   const progress =
-    threshold > 0n ? Number(pairedPrincipal) / Number(threshold) : 0;
+    threshold > 0n ? Number((pairedPrincipal * 10_000n) / threshold) / 10_000 : 0;
 
   return {
     pairedPrincipal,
     threshold,
-    graduated,
+    graduated: false,
     progress: Math.min(progress, 1),
   };
 }

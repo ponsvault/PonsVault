@@ -174,7 +174,10 @@ export async function enrichLaunchRecord(
       marketCapUsd: market.marketCapUsd,
       priceUsd: market.priceUsd,
       graduated: graduation.graduated,
-      graduationProgressPct: Math.min(graduation.progress * 100, 100),
+      // Graduated tokens always report 100% — current pool WETH can be lower.
+      graduationProgressPct: graduation.graduated
+        ? 100
+        : Math.min(graduation.progress * 100, 100),
     };
   } catch {
     return {

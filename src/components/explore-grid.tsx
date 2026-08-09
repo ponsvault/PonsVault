@@ -204,20 +204,26 @@ export function ExploreGrid() {
                       <dt>Market cap</dt>
                       <dd>{formatUsd(launch.marketCapUsd, 0)}</dd>
                     </div>
-                    <div>
-                      <dt>Graduation</dt>
-                      <dd>
-                        {launch.graduationProgressPct != null ? `${progress.toFixed(0)}%` : '—'}
-                      </dd>
-                    </div>
+                  <div>
+                    <dt>Graduation</dt>
+                    <dd>
+                      {launch.graduated
+                        ? 'Graduated'
+                        : launch.graduationProgressPct != null
+                          ? `${progress.toFixed(0)}%`
+                          : '—'}
+                    </dd>
+                  </div>
                   </dl>
 
-                  <div className="pv-token-progress">
-                    <div
-                      className="pv-token-progress-fill"
-                      style={{ width: `${Math.min(progress, 100)}%` }}
-                    />
-                  </div>
+                <div className="pv-token-progress">
+                  <div
+                    className="pv-token-progress-fill"
+                    style={{
+                      width: `${Math.min(launch.graduated ? 100 : progress, 100)}%`,
+                    }}
+                  />
+                </div>
 
                   <div className="pv-token-foot">
                     <span>View token</span>
