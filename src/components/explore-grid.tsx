@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowUpRight, Coins, Flame, Rocket } from 'lucide-react';
 import Image from 'next/image';
@@ -7,9 +8,23 @@ import Link from 'next/link';
 
 import { Reveal } from '@/components/ui/reveal';
 import { fetchRecentLaunches } from '@/lib/pons/api';
-import type { VaultStat } from '@/lib/pons/types';
+import type { PonsLaunchRecord, VaultStat } from '@/lib/pons/types';
 import { VAULT_TEMPLATES } from '@/lib/pons/vault';
 import { cn, formatUsd, ipfsToGateway } from '@/lib/utils';
+
+type ExploreSort = 'newest' | 'marketcap';
+
+function sortLaunches(launches: PonsLaunchRecord[], sort: ExploreSort): PonsLaunchRecord[] {
+  if (sort === 'newest') return launches;
+
+  return [...launches].sort((a, b) => {
+    const aCap = a.marketCapUsd ?? 0;
+    const bCap = b.marketCapUsd ?? 0;
+    if (bCap !== aCap) return bCap - aCap;
+    // Stable fallback when market data is missing.
+    return (b.launchedAt ?? '').localeCompare(a.launchedAt ?? '');
+  });
+}
 
 /** Compact token count: 14391858.74 → "14.4M". */
 function formatCompact(value: string): string {
@@ -40,11 +55,14 @@ const VAULT_STAT_IDLE: Record<VaultStat['kind'], string> = {
 };
 
 export function ExploreGrid() {
+  const [sort, setSort] = useState<ExploreSort>('newest');
   const { data = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['ponsvault-launches'],
     queryFn: fetchRecentLaunches,
     refetchInterval: 20_000,
   });
+
+  const launches = useMemo(() => sortLaunches(data, sort), [data, sort]);
 
   if (isLoading) {
     return (
@@ -87,8 +105,28 @@ export function ExploreGrid() {
   }
 
   return (
-    <div className="pv-explore-grid">
-      {data.map((launch, index) => {
+    <div className="pv-explore">
+      <div className="pv-explore-toolbar" role="group" aria-label="Sort launches">
+        <button
+          type="button"
+          className={cn('pv-explore-sort', sort === 'newest' && 'is-active')}
+          onClick={() => setSort('newest')}
+          aria-pressed={sort === 'newest'}
+        >
+          Newest
+        </button>
+        <button
+          type="button"
+          className={cn('pv-explore-sort', sort === 'marketcap' && 'is-active')}
+          onClick={() => setSort('marketcap')}
+          aria-pressed={sort === 'marketcap'}
+        >
+          Highest market cap
+        </button>
+      </div>
+
+      <div className="pv-explore-grid">
+      {launches.map((launch, index) => {
         const progress = launch.graduationProgressPct ?? 0;
         const template = templateName(launch.vaultTemplate);
         const stat = launch.vaultStat;
@@ -190,6 +228,7 @@ export function ExploreGrid() {
           </Reveal>
         );
       })}
+      </div>
     </div>
   );
 }

@@ -59,6 +59,44 @@
 
 /* --- token grid ---------------------------------------------------------- */
 
+.pv-explore {
+  display: grid;
+  gap: 20px;
+}
+
+.pv-explore-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pv-explore-sort {
+  appearance: none;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition:
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.pv-explore-sort:hover {
+  color: var(--text-primary);
+  border-color: var(--hairline-strong);
+}
+
+.pv-explore-sort.is-active {
+  color: var(--bg);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .pv-explore-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
