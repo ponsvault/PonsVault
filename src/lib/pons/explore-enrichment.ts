@@ -128,13 +128,42 @@ export async function enrichLaunchRecord(
     const supplyWei = resolved?.launched.supply ?? BigInt(PONS_TOTAL_SUPPLY);
     const factory = resolved?.factory;
 
+    const isV2 = resolved?.kind === 'v2';
+
     const [market, graduation, vaultStats] = await Promise.all([
-      readPoolMarketSnapshot({
-        pool: metadata.pool,
-        isToken0,
-        supplyWei,
-      }),
-      factory ? readGraduationStatus(token, factory) : readGraduationStatus(token),
+      // v2 curves are not Uniswap v3 pools — skip the v3 snapshot until graduated.
+      !isV2 && metadata.pool
+        ? readPoolMarketSnapshot({
+            pool: metadata.pool,
+            isToken0,
+            supplyWei,
+          }).catch(() => ({
+            priceInWeth: 0,
+            priceUsd: 0,
+            marketCapUsd: 0,
+            fdvUsd: 0,
+            ethUsd: 0,
+          }))
+        : Promise.resolve({
+            priceInWeth: 0,
+            priceUsd: 0,
+            marketCapUsd: 0,
+            fdvUsd: 0,
+            ethUsd: 0,
+          }),
+      !isV2 && factory
+        ? readGraduationStatus(token, factory).catch(() => ({
+            pairedPrincipal: 0n,
+            threshold: 0n,
+            graduated: false,
+            progress: 0,
+          }))
+        : Promise.resolve({
+            pairedPrincipal: 0n,
+            threshold: 0n,
+            graduated: false,
+            progress: 0,
+          }),
       readVaultStat(launch.vault),
     ]);
 

@@ -2,6 +2,7 @@ import { parseAbi, zeroAddress, type Address } from 'viem';
 
 import { PONS_ACTIVE_FACTORY } from './contracts';
 import { robinhoodPublicClient } from './client';
+import { PONS_V2 } from './v2-deployments';
 
 export const PONS_TOKEN_ABI = parseAbi([
   'function name() view returns (string)',
@@ -61,6 +62,39 @@ export interface CreatorFeeRouting {
   creatorPayout: Address;
 }
 
+const V2_LAUNCH_LOOKUP_ABI = parseAbi([
+  'function getLaunchedToken(address token) view returns ((address token, address curve, address deployer, address creatorFeeRecipient, address pairToken, uint256 graduationThreshold, uint24 poolFee, int24 tickSpacing, uint16 creatorTaxBps, bool buybackEnabled, uint8 phase, uint256 sweptQuote, uint256 sweptTokens, uint256 sweptAt, bool exists) launched)',
+]);
+
+/**
+ * Uniswap pool for v1 tokens, bonding curve for v2 pre-graduation.
+ *
+ * v2 tokens do not implement `liquidityPool()` — calling it reverts and used
+ * to take down every token page. Resolve through the factory instead.
+ */
+async function readTokenPool(token: Address): Promise<Address> {
+  try {
+    return await robinhoodPublicClient.readContract({
+      address: token,
+      abi: PONS_TOKEN_ABI,
+      functionName: 'liquidityPool',
+    });
+  } catch {
+    try {
+      const v2 = await robinhoodPublicClient.readContract({
+        address: PONS_V2.factory as Address,
+        abi: V2_LAUNCH_LOOKUP_ABI,
+        functionName: 'getLaunchedToken',
+        args: [token],
+      });
+      if (v2.exists && v2.curve !== zeroAddress) return v2.curve;
+    } catch {
+      // Not a v2 launch either.
+    }
+    return zeroAddress;
+  }
+}
+
 export async function readTokenOnchainMetadata(
   token: Address,
 ): Promise<TokenOnchainMetadata> {
@@ -90,11 +124,7 @@ export async function readTokenOnchainMetadata(
       abi: PONS_TOKEN_ABI,
       functionName: 'description',
     }),
-    robinhoodPublicClient.readContract({
-      address: token,
-      abi: PONS_TOKEN_ABI,
-      functionName: 'liquidityPool',
-    }),
+    readTokenPool(token),
     robinhoodPublicClient.readContract({
       address: token,
       abi: PONS_TOKEN_ABI,

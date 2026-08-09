@@ -26,17 +26,26 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
   const isV2 = resolved?.kind === 'v2';
 
   const [market, graduation, trades] = await Promise.all([
-    readPoolMarketSnapshot({
-      pool: metadata.pool,
-      isToken0,
-      supplyWei,
-    }).catch(() => ({
-      priceInWeth: 0,
-      priceUsd: 0,
-      marketCapUsd: 0,
-      fdvUsd: 0,
-      ethUsd: 0,
-    })),
+    // v2 bonding curves are not Uniswap v3 pools.
+    !isV2 && metadata.pool
+      ? readPoolMarketSnapshot({
+          pool: metadata.pool,
+          isToken0,
+          supplyWei,
+        }).catch(() => ({
+          priceInWeth: 0,
+          priceUsd: 0,
+          marketCapUsd: 0,
+          fdvUsd: 0,
+          ethUsd: 0,
+        }))
+      : Promise.resolve({
+          priceInWeth: 0,
+          priceUsd: 0,
+          marketCapUsd: 0,
+          fdvUsd: 0,
+          ethUsd: 0,
+        }),
     // v2 graduation is curve/escrow-based — v1 locker maths do not apply.
     !isV2 && factory
       ? readGraduationStatus(token, factory)
@@ -46,13 +55,15 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
           graduated: false,
           progress: 0,
         }),
-    fetchRecentPoolTrades({
-      pool: metadata.pool,
-      token,
-      isToken0,
-      fromBlock: 0n,
-      limit: 48,
-    }).catch(() => []),
+    !isV2 && metadata.pool
+      ? fetchRecentPoolTrades({
+          pool: metadata.pool,
+          token,
+          isToken0,
+          fromBlock: 0n,
+          limit: 48,
+        }).catch(() => [])
+      : Promise.resolve([]),
   ]);
 
   const tradesWithUsd = trades.map((trade) => ({
