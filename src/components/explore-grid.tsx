@@ -126,108 +126,108 @@ export function ExploreGrid() {
       </div>
 
       <div className="pv-explore-grid">
-      {launches.map((launch, index) => {
-        const progress = launch.graduationProgressPct ?? 0;
-        const template = templateName(launch.vaultTemplate);
-        const stat = launch.vaultStat;
-        const statAmount = stat ? Number(stat.amount) : 0;
+        {launches.map((launch, index) => {
+          const progress = launch.graduationProgressPct ?? 0;
+          const template = templateName(launch.vaultTemplate);
+          const stat = launch.vaultStat;
+          const statAmount = stat ? Number(stat.amount) : 0;
 
-        return (
-          <Reveal key={launch.token} delay={Math.min(index, 5) * 0.04}>
-            <article className="pv-token-card">
-              <Link href={`/launchpad/${launch.token}`} className="pv-token-link">
-                <div className="pv-token-head">
-                  <div className="pv-token-logo">
-                    {launch.logo ? (
-                      <Image
-                        src={ipfsToGateway(launch.logo)}
-                        alt={launch.name}
-                        fill
-                        className="object-cover"
-                        unoptimized
-                      />
-                    ) : (
-                      <span className="pv-token-logo-fallback">
-                        {launch.symbol?.slice(0, 2).toUpperCase() ?? '??'}
-                      </span>
-                    )}
+          return (
+            <Reveal key={launch.token} delay={Math.min(index, 5) * 0.04}>
+              <article className="pv-token-card">
+                <Link href={`/launchpad/${launch.token}`} className="pv-token-link">
+                  <div className="pv-token-head">
+                    <div className="pv-token-logo">
+                      {launch.logo ? (
+                        <Image
+                          src={ipfsToGateway(launch.logo)}
+                          alt={launch.name}
+                          fill
+                          className="object-cover"
+                          unoptimized
+                        />
+                      ) : (
+                        <span className="pv-token-logo-fallback">
+                          {launch.symbol?.slice(0, 2).toUpperCase() ?? '??'}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="pv-token-names">
+                      <h2 className="pv-token-name">{launch.name}</h2>
+                      <p className="pv-token-symbol">${launch.symbol}</p>
+                    </div>
+
+                    <span
+                      className={cn('pv-token-status', launch.graduated && 'pv-token-status-live')}
+                    >
+                      {launch.graduated ? 'Graduated' : 'Climbing'}
+                    </span>
                   </div>
 
-                  <div className="pv-token-names">
-                    <h2 className="pv-token-name">{launch.name}</h2>
-                    <p className="pv-token-symbol">${launch.symbol}</p>
+                  <p className="pv-token-desc">{launch.description}</p>
+
+                  {template ? (
+                    <div className="pv-token-vault">
+                      <span className="pv-token-vault-template">{template}</span>
+                      {stat && statAmount > 0 ? (
+                        <span className="pv-token-vault-burn">
+                          {stat.kind === 'burn' ? (
+                            <Flame className="h-3 w-3" strokeWidth={2} />
+                          ) : (
+                            <Coins className="h-3 w-3" strokeWidth={2} />
+                          )}
+                          {formatCompact(stat.amount)} {stat.unit ?? launch.symbol}{' '}
+                          {VAULT_STAT_VERB[stat.kind]}
+                          {/* A dividend is paid in a stock, so a share of this
+                              token's supply would be a meaningless number. */}
+                          {stat.unit ? null : ` · ${stat.percent.toFixed(2)}%`}
+                        </span>
+                      ) : (
+                        <span className="pv-token-vault-idle">
+                          {VAULT_STAT_IDLE[stat?.kind ?? 'burn']}
+                        </span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="pv-token-vault">
+                      <span className="pv-token-vault-none">No vault · fees go to the creator</span>
+                    </div>
+                  )}
+
+                  <dl className="pv-token-stats">
+                    <div>
+                      <dt>Price</dt>
+                      <dd>{formatUsd(launch.priceUsd, 6)}</dd>
+                    </div>
+                    <div>
+                      <dt>Market cap</dt>
+                      <dd>{formatUsd(launch.marketCapUsd, 0)}</dd>
+                    </div>
+                    <div>
+                      <dt>Graduation</dt>
+                      <dd>
+                        {launch.graduationProgressPct != null ? `${progress.toFixed(0)}%` : '—'}
+                      </dd>
+                    </div>
+                  </dl>
+
+                  <div className="pv-token-progress">
+                    <div
+                      className="pv-token-progress-fill"
+                      style={{ width: `${Math.min(progress, 100)}%` }}
+                    />
                   </div>
 
-                  <span
-                    className={cn('pv-token-status', launch.graduated && 'pv-token-status-live')}
-                  >
-                    {launch.graduated ? 'Graduated' : 'Climbing'}
-                  </span>
-                </div>
-
-                <p className="pv-token-desc">{launch.description}</p>
-
-                {template ? (
-                  <div className="pv-token-vault">
-                    <span className="pv-token-vault-template">{template}</span>
-                    {stat && statAmount > 0 ? (
-                      <span className="pv-token-vault-burn">
-                        {stat.kind === 'burn' ? (
-                          <Flame className="h-3 w-3" strokeWidth={2} />
-                        ) : (
-                          <Coins className="h-3 w-3" strokeWidth={2} />
-                        )}
-                        {formatCompact(stat.amount)} {stat.unit ?? launch.symbol}{' '}
-                        {VAULT_STAT_VERB[stat.kind]}
-                        {/* A dividend is paid in a stock, so a share of this
-                            token's supply would be a meaningless number. */}
-                        {stat.unit ? null : ` · ${stat.percent.toFixed(2)}%`}
-                      </span>
-                    ) : (
-                      <span className="pv-token-vault-idle">
-                        {VAULT_STAT_IDLE[stat?.kind ?? 'burn']}
-                      </span>
-                    )}
+                  <div className="pv-token-foot">
+                    <span>View token</span>
+                    <ArrowUpRight className="h-3.5 w-3.5" />
                   </div>
-                ) : (
-                  <div className="pv-token-vault">
-                    <span className="pv-token-vault-none">No vault · fees go to the creator</span>
-                  </div>
-                )}
-
-                <dl className="pv-token-stats">
-                  <div>
-                    <dt>Price</dt>
-                    <dd>{formatUsd(launch.priceUsd, 6)}</dd>
-                  </div>
-                  <div>
-                    <dt>Market cap</dt>
-                    <dd>{formatUsd(launch.marketCapUsd, 0)}</dd>
-                  </div>
-                  <div>
-                    <dt>Graduation</dt>
-                    <dd>
-                      {launch.graduationProgressPct != null ? `${progress.toFixed(0)}%` : '—'}
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="pv-token-progress">
-                  <div
-                    className="pv-token-progress-fill"
-                    style={{ width: `${Math.min(progress, 100)}%` }}
-                  />
-                </div>
-
-                <div className="pv-token-foot">
-                  <span>View token</span>
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </div>
-              </Link>
-            </article>
-          </Reveal>
-        );
-      })}
+                </Link>
+              </article>
+            </Reveal>
+          );
+        })}
       </div>
     </div>
   );
