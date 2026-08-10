@@ -458,6 +458,12 @@ export function LaunchForm() {
       });
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
+      if (receipt.status !== 'success') {
+        throw new Error(
+          'Launch transaction reverted on-chain. For RWA Dividend with a thin WETH market, pair and dividend asset must be the same stock (e.g. SPCX + SPCX).',
+        );
+      }
+
       const vaultLaunch = extractV2VaultLaunch(receipt);
       const token = vaultLaunch?.token;
       const curve = vaultLaunch?.curve;
