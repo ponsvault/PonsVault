@@ -141,10 +141,12 @@ contract PonsV2StakingVault is PonsV2VaultBase {
 
     function canRun() external view returns (bool ready, string memory reason) {
         if (totalStaked == 0) return (false, "No stake");
+        // Staking also locks quote into the reward pool — unencumbered idle plus
+        // escrow/curve is what a new run can still distribute.
         (uint256 quoteAmt,) = unencumberedBalances();
-        uint256 available = quoteAmt + pendingEscrowQuote();
+        uint256 available = quoteAmt + pendingEscrowQuote() + pendingCurveQuote();
         if (available < config.minHarvest || available == 0) {
-            return (false, "Insufficient accrued fees");
+            return (false, "Insufficient accrued fees (may still be sitting on the curve)");
         }
         return (true, "");
     }

@@ -238,9 +238,10 @@ contract PonsV2RwaVault is PonsV2VaultBase {
     /* ---------------------------------------------------------------------- */
 
     function canRun() external view returns (bool ready, string memory reason) {
-        uint256 available = _spendableQuote(config.rwaAsset) + pendingEscrowQuote();
+        // Include unswept curve fees — they only hit the escrow after {run} sweeps.
+        uint256 available = pendingQuote();
         if (available < config.minHarvestWei || available == 0) {
-            return (false, "Insufficient accrued fees (harvest may still be pending in the escrow)");
+            return (false, "Insufficient accrued fees (may still be sitting on the curve)");
         }
         return (true, "");
     }

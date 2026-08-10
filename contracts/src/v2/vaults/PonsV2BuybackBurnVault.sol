@@ -119,10 +119,9 @@ contract PonsV2BuybackBurnVault is PonsV2VaultBase {
 
     function canRun() external view returns (bool ready, string memory reason) {
         Config memory cfg = config;
-        (uint256 quoteBalance,) = idleBalances();
-        uint256 available = quoteBalance + pendingEscrowQuote();
+        uint256 available = pendingQuote();
         if (available < cfg.minHarvest || available == 0) {
-            return (false, "Insufficient accrued fees (may still be pending in the escrow)");
+            return (false, "Insufficient accrued fees (may still be sitting on the curve)");
         }
         if (cfg.burnBps != 0 && buyback == address(0)) {
             return (false, "Buyback swapper not set");

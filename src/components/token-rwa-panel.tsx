@@ -254,7 +254,7 @@ export function TokenRwaPanel({ symbol, state, onChanged }: TokenRwaPanelProps) 
               </dd>
             </div>
             <div className="token-vault-row">
-              <dt>Fees before a purchase</dt>
+              <dt>Min fees to buy</dt>
               <dd className="token-vault-prose">{formatWeth(state.minHarvestWei)}</dd>
             </div>
             <div className="token-vault-row">

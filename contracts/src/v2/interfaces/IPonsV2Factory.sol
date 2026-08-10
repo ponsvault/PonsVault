@@ -58,6 +58,16 @@ interface IPonsV2Factory {
 
     function getLaunchedToken(address token) external view returns (LaunchedToken memory);
 
+    struct FeePolicy {
+        address protocolFeeRecipient;
+        uint16 protocolFeeShareBps;
+        uint16 buybackBurnBps;
+        uint16 hookFeeBps;
+        uint16 maxInternalPriceImpactBps;
+    }
+
+    function getLaunchFeePolicy(address token) external view returns (FeePolicy memory);
+
     function launchFee() external view returns (uint256);
 
     function launchEnabled() external view returns (bool);

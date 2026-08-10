@@ -440,23 +440,37 @@ async function fetchRwaVaultState(client: PublicClient, vault: Address): Promise
       client.readContract({ ...base, functionName: 'token' }),
     ]);
 
-  // Read as plain balances rather than through a vault getter: this template
-  // spends its whole WETH balance on every run and burns the token side, so
-  // there is no encumbered portion to subtract.
-  const [pendingWeth, pendingToken] = await Promise.all([
-    client.readContract({
-      address: PONS_WETH,
-      abi: ERC20_BALANCE_ABI,
-      functionName: 'balanceOf',
-      args: [vault],
-    }),
-    client.readContract({
-      address: token,
-      abi: ERC20_BALANCE_ABI,
-      functionName: 'balanceOf',
-      args: [vault],
-    }),
-  ]);
+  // Prefer pendingQuote() (idle + escrow + unswept curve creator share). Older
+  // impls lack it — fall back to quote idle + escrow, never raw WETH.
+  let pendingWeth = 0n;
+  let pendingToken = 0n;
+  try {
+    pendingWeth = await client.readContract({ ...base, functionName: 'pendingQuote' });
+    const idle = await client.readContract({ ...base, functionName: 'idleBalances' });
+    pendingToken = idle[1];
+  } catch {
+    try {
+      const [idle, escrow] = await Promise.all([
+        client.readContract({ ...base, functionName: 'idleBalances' }),
+        client.readContract({ ...base, functionName: 'pendingEscrowQuote' }),
+      ]);
+      pendingWeth = idle[0] + escrow;
+      pendingToken = idle[1];
+    } catch {
+      pendingWeth = await client.readContract({
+        address: PONS_WETH,
+        abi: ERC20_BALANCE_ABI,
+        functionName: 'balanceOf',
+        args: [vault],
+      });
+      pendingToken = await client.readContract({
+        address: token,
+        abi: ERC20_BALANCE_ABI,
+        functionName: 'balanceOf',
+        args: [vault],
+      });
+    }
+  }
 
   return {
     template: 'rwa',

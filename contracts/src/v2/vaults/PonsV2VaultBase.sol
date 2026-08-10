@@ -8,14 +8,18 @@ import {ReentrancyGuardUpgradeable} from
     "@openzeppelin-contracts-upgradeable/security/ReentrancyGuardUpgradeable.sol";
 
 import {PonsV2Addresses} from "../PonsV2Addresses.sol";
+import {IPonsCurve} from "../interfaces/IPonsCurve.sol";
 import {IPonsFeeEscrow} from "../interfaces/IPonsFeeEscrow.sol";
+import {IPonsV2Factory} from "../interfaces/IPonsV2Factory.sol";
 
 /// @title PonsV2VaultBase
 /// @notice Shared plumbing for PonsVault templates on pons v2.
 ///
-/// @dev How a v2 vault earns: the vault is set as `creatorFeeRecipient` on the launch. Fees
-///      credit the fee escrow under that address. Anyone may call a template's {run}, which
-///      pulls the vault's claimable balance into itself via {_harvest} and distributes it.
+/// @dev How a v2 vault earns: the vault is set as `creatorFeeRecipient` on the launch. Trade
+///      fees first sit on the bonding curve (`quoteFeeBalance` / `creatorTaxBalance`). The vault
+///      (as fee recipient) must `sweepFees` them into the fee escrow, then {_harvest} claims
+///      that escrow balance. Anyone may call a template's {run}, which does sweep → claim →
+///      distribute.
 ///
 ///      Unlike v1 there is no locker sweep and no collector. The vault is its own claimant.
 ///      The payout asset is the launch's quote asset (today AAPL; later possibly native ETH
@@ -29,6 +33,7 @@ abstract contract PonsV2VaultBase is Initializable, ReentrancyGuardUpgradeable {
 
     event FeesHarvested(uint256 quoteAmount, uint256 tokenAmount);
     event TokensBurned(uint256 amount);
+    event CurveFeesSwept(uint256 quoteFeeBalance, uint256 creatorTaxBalance);
 
     /// @notice The pons v2 launch token this vault is bound to.
     address public token;
@@ -74,12 +79,67 @@ abstract contract PonsV2VaultBase is Initializable, ReentrancyGuardUpgradeable {
         return IPonsFeeEscrow(PonsV2Addresses.FEE_ESCROW).balanceOfToken(address(this), token);
     }
 
+    /// @notice Creator's unswept share still sitting on the bonding curve.
+    /// @dev Escrow reads alone understate fees — pons only credits the escrow after a sweep.
+    function pendingCurveQuote() public view returns (uint256) {
+        address curve = _curve();
+        if (curve == address(0)) return 0;
+
+        uint256 tax = IPonsCurve(curve).creatorTaxBalance();
+        uint256 fees = IPonsCurve(curve).quoteFeeBalance();
+        if (fees == 0) return tax;
+
+        IPonsV2Factory.FeePolicy memory policy =
+            IPonsV2Factory(PonsV2Addresses.FACTORY).getLaunchFeePolicy(token);
+        IPonsV2Factory.LaunchedToken memory launch =
+            IPonsV2Factory(PonsV2Addresses.FACTORY).getLaunchedToken(token);
+
+        uint256 afterProtocol =
+            fees - (fees * uint256(policy.protocolFeeShareBps)) / PonsV2Addresses.BPS_DENOMINATOR;
+        if (launch.buybackEnabled && policy.buybackBurnBps != 0) {
+            afterProtocol = afterProtocol
+                - (afterProtocol * uint256(policy.buybackBurnBps)) / PonsV2Addresses.BPS_DENOMINATOR;
+        }
+        return tax + afterProtocol;
+    }
+
+    /// @notice Idle vault quote + escrow + unswept curve creator share.
+    function pendingQuote() public view returns (uint256) {
+        (uint256 idle,) = idleBalances();
+        return idle + pendingEscrowQuote() + pendingCurveQuote();
+    }
+
     function description() external view virtual returns (string memory);
 
     function template() external pure virtual returns (string memory);
 
-    /// @dev Pulls claimable balances out of the fee escrow into this vault.
+    function _curve() internal view returns (address) {
+        IPonsV2Factory.LaunchedToken memory launch =
+            IPonsV2Factory(PonsV2Addresses.FACTORY).getLaunchedToken(token);
+        return launch.exists ? launch.curve : address(0);
+    }
+
+    /// @dev Moves curve fee balances into the escrow. Only the vault (fee recipient) or the
+    ///      protocol fee-sweep operator may call `sweepFees`; we are the vault.
+    function _sweepCurveFees() internal {
+        address curve = _curve();
+        if (curve == address(0)) return;
+
+        uint256 fees = IPonsCurve(curve).quoteFeeBalance();
+        uint256 tax = IPonsCurve(curve).creatorTaxBalance();
+        if (fees == 0 && tax == 0) return;
+
+        try IPonsCurve(curve).sweepFees(0) {
+            emit CurveFeesSwept(fees, tax);
+        } catch {
+            // Operator-gated paths or empty dust — run() still tries escrow/idle.
+        }
+    }
+
+    /// @dev Sweep curve → escrow, then pull claimable balances into this vault.
     function _harvest() internal returns (uint256 quoteGained, uint256 tokenGained) {
+        _sweepCurveFees();
+
         (uint256 quoteBefore, uint256 tokenBefore) = idleBalances();
 
         uint256 quoteOwed = pendingEscrowQuote();

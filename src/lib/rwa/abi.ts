@@ -144,6 +144,37 @@ export const PONS_RWA_VAULT_ABI = [
   },
   {
     type: 'function',
+    name: 'pendingQuote',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'pendingEscrowQuote',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'quoteAsset',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'idleBalances',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      { name: 'quoteBalance', type: 'uint256' },
+      { name: 'tokenBalance', type: 'uint256' },
+    ],
+  },
+  {
+    type: 'function',
     name: 'runCount',
     stateMutability: 'view',
     inputs: [],
