@@ -5,6 +5,8 @@ import {
   isAddress,
   parseEventLogs,
   parseUnits,
+  toHex,
+  type Address,
   type Hex,
   type TransactionReceipt,
 } from 'viem';
@@ -16,6 +18,7 @@ import type { LaunchFormInput } from './types';
 import {
   findV2PairToken,
   isV2VaultLauncherDeployed,
+  PONS_V2,
   PONSVAULT_V2_DEPLOYMENT,
 } from './v2-deployments';
 import { vaultTemplateId, type VaultTemplateId } from './vault';
@@ -274,6 +277,198 @@ export function validateV2VaultInput(
 /* transaction                                                               */
 /* -------------------------------------------------------------------------- */
 
+/** Vault factory that `createVault` must hit for a given template. */
+export function v2VaultFactoryAddress(
+  template: 'buyback-burn' | 'staking' | 'rwa',
+): Address {
+  if (template === 'staking') {
+    return getAddress(PONSVAULT_V2_DEPLOYMENT.stakingFactory) as Address;
+  }
+  if (template === 'rwa') {
+    return getAddress(PONSVAULT_V2_DEPLOYMENT.rwaFactory) as Address;
+  }
+  return getAddress(PONSVAULT_V2_DEPLOYMENT.buybackFactory) as Address;
+}
+
+export const PONS_V2_FACTORY_LAUNCH_ABI = [
+  {
+    type: 'function',
+    name: 'launchToken',
+    stateMutability: 'payable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: TOKEN_PARAMS_COMPONENTS },
+      { name: 'launchConfigId', type: 'uint256' },
+      { name: 'pairToken', type: 'address' },
+    ],
+    outputs: [
+      { name: 'token', type: 'address' },
+      { name: 'curve', type: 'address' },
+    ],
+  },
+  {
+    type: 'function',
+    name: 'previewLaunchEconomics',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'launchConfigId', type: 'uint256' },
+      { name: 'pairToken', type: 'address' },
+    ],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'transferCreatorFeeRecipient',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'newRecipient', type: 'address' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'event',
+    name: 'TokenLaunched',
+    inputs: [
+      { name: 'token', type: 'address', indexed: true },
+      { name: 'curve', type: 'address', indexed: true },
+      { name: 'deployer', type: 'address', indexed: true },
+      { name: 'pairToken', type: 'address', indexed: false },
+      { name: 'launchConfigId', type: 'uint256', indexed: false },
+      { name: 'graduationThreshold', type: 'uint256', indexed: false },
+    ],
+  },
+] as const;
+
+export const PONS_V2_VAULT_FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'createVault',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'quoteAsset', type: 'address' },
+      { name: 'config', type: 'bytes' },
+    ],
+    outputs: [{ name: 'vault', type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'vaultOf',
+    stateMutability: 'view',
+    inputs: [{ name: 'token', type: 'address' }],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'event',
+    name: 'VaultCreated',
+    inputs: [
+      { name: 'token', type: 'address', indexed: true },
+      { name: 'vault', type: 'address', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
+    ],
+  },
+] as const;
+
+export function randomLaunchSalt(): Hex {
+  return toHex(crypto.getRandomValues(new Uint8Array(32)));
+}
+
+export type V2UserVaultLaunchPlan = {
+  factory: Address;
+  vaultFactory: Address;
+  pairToken: Address;
+  launchConfigId: bigint;
+  launchTokenData: Hex;
+  createVaultData: (token: Address) => Hex;
+  transferFeeData: (token: Address, vault: Address) => Hex;
+};
+
+/**
+ * User-as-deployer launch plan.
+ *
+ * The wallet calls the pons factory directly so GMGN / explorers attribute DEV
+ * to the creator. Vault attach + fee redirect follow in the same session.
+ */
+export function buildV2UserVaultLaunchPlan(
+  input: LaunchFormInput,
+  socials: {
+    twitter: string;
+    telegram: string;
+    discord: string;
+    website: string;
+    farcaster: string;
+  },
+  opts: {
+    name?: string;
+    symbol?: string;
+    creatorTaxBps?: number;
+    salt?: Hex;
+    launchConfigId?: bigint;
+    /** From `factory.previewLaunchEconomics` — required for a direct launch. */
+    expectedEconomics: Hex;
+    /** Connected wallet — becomes on-chain deployer and initial fee recipient. */
+    creator: Address;
+  },
+): V2UserVaultLaunchPlan {
+  if (!isV2VaultTemplate(input.vaultTemplate)) {
+    throw new Error('Cannot encode a v2 vault launch without a v2 template.');
+  }
+
+  const pair = findV2PairToken(input.pairToken);
+  if (!pair) throw new Error('Unknown pairing asset.');
+
+  const name = opts.name ?? input.name.trim();
+  const symbol = opts.symbol ?? input.symbol.trim().toUpperCase();
+  const creatorTaxBps = opts.creatorTaxBps ?? 0;
+  const salt = opts.salt ?? randomLaunchSalt();
+  const launchConfigId = opts.launchConfigId ?? PONS_DEFAULT_CONFIG_ID;
+  const pairToken = getAddress(pair.address) as Address;
+  const creator = getAddress(opts.creator) as Address;
+  const vaultConfig = encodeV2VaultConfig(input);
+  const vaultFactory = v2VaultFactoryAddress(input.vaultTemplate);
+
+  const params = {
+    name,
+    symbol,
+    logo: input.imageUri.trim(),
+    description: input.description.trim(),
+    socials,
+    creatorFeeRecipient: creator,
+    creatorTaxBps,
+    buybackEnabled: false,
+    expectedEconomics: opts.expectedEconomics,
+    salt,
+  };
+
+  return {
+    factory: getAddress(PONS_V2.factory) as Address,
+    vaultFactory,
+    pairToken,
+    launchConfigId,
+    launchTokenData: encodeFunctionData({
+      abi: PONS_V2_FACTORY_LAUNCH_ABI,
+      functionName: 'launchToken',
+      args: [params, launchConfigId, pairToken],
+    }),
+    createVaultData: (token) =>
+      encodeFunctionData({
+        abi: PONS_V2_VAULT_FACTORY_ABI,
+        functionName: 'createVault',
+        args: [token, pairToken, vaultConfig],
+      }),
+    transferFeeData: (token, vault) =>
+      encodeFunctionData({
+        abi: PONS_V2_FACTORY_LAUNCH_ABI,
+        functionName: 'transferCreatorFeeRecipient',
+        args: [token, vault],
+      }),
+  };
+}
+
+/**
+ * @deprecated Prefer {@link buildV2UserVaultLaunchPlan}. Kept for older launcher
+ * scripts; routes deployer attribution through the shared launcher contract.
+ */
 export function encodeLaunchWithV2VaultTransaction(
   input: LaunchFormInput,
   socials: {
@@ -326,6 +521,50 @@ export function encodeLaunchWithV2VaultTransaction(
       encodeV2VaultConfig(input),
     ],
   });
+}
+
+export function extractV2FactoryLaunch(receipt: TransactionReceipt): {
+  token: `0x${string}`;
+  curve: `0x${string}`;
+  deployer: `0x${string}`;
+  pairToken: `0x${string}`;
+} | null {
+  const logs = parseEventLogs({
+    abi: PONS_V2_FACTORY_LAUNCH_ABI,
+    eventName: 'TokenLaunched',
+    logs: receipt.logs,
+  });
+  const event = logs[0];
+  if (!event?.args.token || !event.args.curve || !event.args.deployer || !event.args.pairToken) {
+    return null;
+  }
+  return {
+    token: event.args.token,
+    curve: event.args.curve,
+    deployer: event.args.deployer,
+    pairToken: event.args.pairToken,
+  };
+}
+
+export function extractV2VaultCreated(receipt: TransactionReceipt): {
+  token: `0x${string}`;
+  vault: `0x${string}`;
+  creator: `0x${string}`;
+} | null {
+  const logs = parseEventLogs({
+    abi: PONS_V2_VAULT_FACTORY_ABI,
+    eventName: 'VaultCreated',
+    logs: receipt.logs,
+  });
+  const event = logs[0];
+  if (!event?.args.token || !event?.args.vault || !event?.args.creator) {
+    return null;
+  }
+  return {
+    token: event.args.token,
+    vault: event.args.vault,
+    creator: event.args.creator,
+  };
 }
 
 export function extractV2VaultLaunch(receipt: TransactionReceipt): {

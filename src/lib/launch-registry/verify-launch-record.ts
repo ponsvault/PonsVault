@@ -38,6 +38,8 @@ export async function verifyLaunchRecordOnChain(
   const onChainDeployer = resolved.launched.deployer.toLowerCase();
 
   if (resolved.kind === 'v2') {
+    // Current path: user calls the factory directly → on-chain deployer is the
+    // wallet. Legacy path: shared PonsV2VaultLauncher was the deployer.
     const viaV2Launcher =
       isV2VaultLauncherDeployed() &&
       onChainDeployer === PONSVAULT_V2_LAUNCHER.toLowerCase();
@@ -51,10 +53,8 @@ export async function verifyLaunchRecordOnChain(
       throw new Error('Fee wallet does not match on-chain creator fee recipient.');
     }
   } else {
-    // A vault launch goes through PonsVaultLauncher, which becomes the token's
-    // on-chain deployer so that fees can be swept permissionlessly. The creator is
-    // then the transaction sender, which is still asserted below — so recording a
-    // launch you did not send remains impossible.
+    // Legacy v1 vault launches went through PonsVaultLauncher, which became the
+    // on-chain deployer. The creator is still the transaction sender below.
     const launchedViaVaultLauncher =
       isVaultLauncherDeployed() && onChainDeployer === PONSVAULT_LAUNCHER.toLowerCase();
 

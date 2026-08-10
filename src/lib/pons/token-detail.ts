@@ -13,6 +13,7 @@ import {
   readTokenOnchainMetadata,
 } from './token-state';
 import type { TokenDetailResponse } from './types';
+import { readV2CurveMarketSnapshot } from './v2-pricing';
 
 export async function fetchTokenDetail(token: Address): Promise<TokenDetailResponse> {
   const [metadata, resolved] = await Promise.all([
@@ -21,41 +22,43 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
   ]);
 
   const isToken0 = resolved?.launched.isToken0 ?? isToken0Ordering(token);
-  const supplyWei = resolved?.launched.supply ?? BigInt(PONS_TOTAL_SUPPLY);
+  const supplyWei =
+    resolved?.launched.supply && resolved.launched.supply > 0n
+      ? resolved.launched.supply
+      : BigInt(PONS_TOTAL_SUPPLY);
   const factory = resolved?.factory ?? null;
 
   const isV2 = resolved?.kind === 'v2';
+  const v2Curve =
+    isV2 && resolved?.launched.curve ? resolved.launched.curve : null;
 
-  const [market, rawGraduation, trades] = await Promise.all([
-    // v2 bonding curves are not Uniswap v3 pools.
-    !isV2 && metadata.pool
-      ? readPoolMarketSnapshot({
-          pool: metadata.pool,
-          isToken0,
+  const emptyMarket = {
+    priceInWeth: 0,
+    priceUsd: 0,
+    marketCapUsd: 0,
+    fdvUsd: 0,
+    ethUsd: 0,
+  };
+
+  const [marketOrCurve, trades] = await Promise.all([
+    v2Curve
+      ? readV2CurveMarketSnapshot({
+          curve: v2Curve,
+          pairToken: resolved!.launched.pairedToken,
           supplyWei,
         }).catch(() => ({
-          priceInWeth: 0,
-          priceUsd: 0,
-          marketCapUsd: 0,
-          fdvUsd: 0,
-          ethUsd: 0,
-        }))
-      : Promise.resolve({
-          priceInWeth: 0,
-          priceUsd: 0,
-          marketCapUsd: 0,
-          fdvUsd: 0,
-          ethUsd: 0,
-        }),
-    // v2 graduation is curve/escrow-based — v1 locker maths do not apply.
-    !isV2 && factory
-      ? readGraduationStatus(token, factory)
-      : Promise.resolve({
-          pairedPrincipal: 0n,
-          threshold: 0n,
-          graduated: false,
+          ...emptyMarket,
           progress: 0,
-        }),
+          graduated: false,
+          priceInQuote: 0,
+        }))
+      : !isV2 && metadata.pool
+        ? readPoolMarketSnapshot({
+            pool: metadata.pool,
+            isToken0,
+            supplyWei,
+          }).catch(() => emptyMarket)
+        : Promise.resolve(emptyMarket),
     !isV2 && metadata.pool
       ? fetchRecentPoolTrades({
           pool: metadata.pool,
@@ -66,6 +69,24 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
         }).catch(() => [])
       : Promise.resolve([]),
   ]);
+
+  const market = marketOrCurve;
+  const rawGraduation =
+    v2Curve && 'progress' in marketOrCurve
+      ? {
+          pairedPrincipal: 0n,
+          threshold: 0n,
+          graduated: Boolean(marketOrCurve.graduated),
+          progress: marketOrCurve.progress,
+        }
+      : !isV2 && factory
+        ? await readGraduationStatus(token, factory)
+        : {
+            pairedPrincipal: 0n,
+            threshold: 0n,
+            graduated: false,
+            progress: 0,
+          };
 
   const graduation = !isV2
     ? await resolveStickyGraduation({

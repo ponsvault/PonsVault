@@ -21,9 +21,10 @@ import {
   verifyLaunchedToken,
 } from '@/lib/pons/api';
 import { robinhoodChain } from '@/lib/pons/chain';
-import { ROBINHOOD_RPC_URL } from '@/lib/pons/constants';
 import {
   PONS_CHAIN_ID,
+  PONS_DEFAULT_CONFIG_ID,
+  ROBINHOOD_RPC_URL,
   TOKEN_NAME_MAX_LENGTH,
   TOKEN_SYMBOL_MAX_LENGTH,
 } from '@/lib/pons/constants';
@@ -49,14 +50,19 @@ import {
   VAULT_TEMPLATES,
   type VaultTemplateId,
 } from '@/lib/pons/vault';
-import { PONS_V2_PAIR_TOKENS, isV2VaultLauncherDeployed } from '@/lib/pons/v2-deployments';
+import {
+  PONS_V2,
+  PONS_V2_PAIR_TOKENS,
+  isV2VaultLauncherDeployed,
+} from '@/lib/pons/v2-deployments';
 import { defaultV2PairAddress } from '@/lib/pons/v2-status';
 import {
-  encodeLaunchWithV2VaultTransaction,
-  extractV2VaultLaunch,
+  buildV2UserVaultLaunchPlan,
+  extractV2FactoryLaunch,
+  extractV2VaultCreated,
   isV2VaultTemplate,
+  PONS_V2_FACTORY_LAUNCH_ABI,
   validateV2VaultInput,
-  v2VaultLauncherAddress,
 } from '@/lib/pons/v2-vault';
 import type { LaunchFormInput } from '@/lib/pons/types';
 import { cn, ipfsToGateway } from '@/lib/utils';
@@ -331,11 +337,8 @@ export function LaunchForm() {
     if (vaultConfigError) {
       return { label: 'Check vault settings', disabled: true, mode: 'launch' as const, blocked: true };
     }
-    if (status && !status.publicReady && !status.vaultCanLaunch) {
+    if (status && !status.publicReady) {
       return { label: 'Launches not open yet', disabled: true, mode: 'launch' as const, blocked: true };
-    }
-    if (status && !status.vaultCanLaunch) {
-      return { label: 'Vault launcher not ready', disabled: true, mode: 'launch' as const, blocked: true };
     }
     if (!hasEnoughEth) {
       return { label: 'Insufficient ETH', disabled: true, mode: 'launch' as const, blocked: true };
@@ -434,28 +437,39 @@ export function LaunchForm() {
         status.maxCreatorTaxBps,
       );
 
-      const data = encodeLaunchWithV2VaultTransaction(launchForm, socials, {
-        name,
-        symbol,
-        creatorTaxBps,
-      });
-      const value = BigInt(status.launchFeeWei);
-
-      setStatusText('Confirm in your wallet…');
-      const hash = await walletClient.sendTransaction({
-        account: address,
-        chain: robinhoodChain,
-        to: v2VaultLauncherAddress(),
-        value,
-        data,
-      });
-
-      setStatusText('Waiting for confirmation…');
       const { createPublicClient, http } = await import('viem');
       const publicClient = createPublicClient({
         chain: robinhoodChain,
         transport: http(ROBINHOOD_RPC_URL),
       });
+
+      // Call the factory from the user wallet so on-chain deployer (GMGN DEV) is you.
+      const expectedEconomics = await publicClient.readContract({
+        address: PONS_V2.factory as `0x${string}`,
+        abi: PONS_V2_FACTORY_LAUNCH_ABI,
+        functionName: 'previewLaunchEconomics',
+        args: [PONS_DEFAULT_CONFIG_ID, selectedPair.address as `0x${string}`],
+      });
+
+      const plan = buildV2UserVaultLaunchPlan(launchForm, socials, {
+        name,
+        symbol,
+        creatorTaxBps,
+        expectedEconomics,
+        creator: address,
+      });
+      const value = BigInt(status.launchFeeWei);
+
+      setStatusText('1/3 Confirm token launch…');
+      const hash = await walletClient.sendTransaction({
+        account: address,
+        chain: robinhoodChain,
+        to: plan.factory,
+        value,
+        data: plan.launchTokenData,
+      });
+
+      setStatusText('Waiting for launch confirmation…');
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
 
       if (receipt.status !== 'success') {
@@ -464,12 +478,48 @@ export function LaunchForm() {
         );
       }
 
-      const vaultLaunch = extractV2VaultLaunch(receipt);
-      const token = vaultLaunch?.token;
-      const curve = vaultLaunch?.curve;
+      const factoryLaunch = extractV2FactoryLaunch(receipt);
+      const token = factoryLaunch?.token;
+      const curve = factoryLaunch?.curve;
 
       if (!token) {
         throw new Error('Launch transaction confirmed but token address was not found in logs.');
+      }
+
+      setStatusText('2/3 Confirm vault attach…');
+      const vaultHash = await walletClient.sendTransaction({
+        account: address,
+        chain: robinhoodChain,
+        to: plan.vaultFactory,
+        data: plan.createVaultData(token),
+      });
+      const vaultReceipt = await publicClient.waitForTransactionReceipt({
+        hash: vaultHash,
+      });
+      if (vaultReceipt.status !== 'success') {
+        throw new Error(
+          `Token launched at ${token} but vault creation reverted. Attach the vault manually before trading fees accrue.`,
+        );
+      }
+
+      const vaultCreated = extractV2VaultCreated(vaultReceipt);
+      const vault = vaultCreated?.vault;
+      if (!vault) {
+        throw new Error('Vault created but address was not found in logs.');
+      }
+
+      setStatusText('3/3 Confirm fee redirect to vault…');
+      const feeHash = await walletClient.sendTransaction({
+        account: address,
+        chain: robinhoodChain,
+        to: plan.factory,
+        data: plan.transferFeeData(token, vault),
+      });
+      const feeReceipt = await publicClient.waitForTransactionReceipt({ hash: feeHash });
+      if (feeReceipt.status !== 'success') {
+        throw new Error(
+          `Token and vault are live but fee redirect reverted. Call transferCreatorFeeRecipient(${token}, ${vault}) from this wallet.`,
+        );
       }
 
       // Optional initial buy in the pairing asset (v2 has no ETH top-up on launch).
@@ -523,7 +573,7 @@ export function LaunchForm() {
           description: launchForm.description.trim(),
           logo: launchForm.imageUri.trim(),
           deployer: address,
-          feeWallet: vaultLaunch.vault,
+          feeWallet: vault,
           transactionHash: hash,
           launchedAt: new Date().toISOString(),
         }),
@@ -557,7 +607,7 @@ export function LaunchForm() {
             <span className="pv-badge pv-badge-live">PonsVault V2</span>
           </div>
           <p className="launchpad-field-note">
-            Deploys through the open pons v2 factory with a vault attached to creator fees.
+            Deploys from your wallet on the pons v2 factory, then attaches a vault to creator fees.
           </p>
         </header>
 

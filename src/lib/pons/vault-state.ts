@@ -295,13 +295,16 @@ export async function resolveVaultAddress(
 export async function resolveVaultTemplate(
   client: PublicClient,
   vault: Address,
-): Promise<'buyback-burn' | 'staking'> {
+): Promise<'buyback-burn' | 'staking' | 'rwa' | 'lottery'> {
   const template = await client
     .readContract({ address: vault, abi: PONS_VAULT_ABI, functionName: 'template' })
     // Vaults deployed before `template()` existed are all buyback-and-burn.
     .catch(() => 'buyback-burn');
 
-  return template === 'staking' ? 'staking' : 'buyback-burn';
+  if (template === 'staking') return 'staking';
+  if (template === 'rwa') return 'rwa';
+  if (template === 'lottery') return 'lottery';
+  return 'buyback-burn';
 }
 
 /**

@@ -1,0 +1,192 @@
+import { formatUnits, parseAbi, type Address } from 'viem';
+
+import { robinhoodPublicClient } from './client';
+import { PONS_QUOTER_V2, PONS_WETH } from './contracts';
+import { fetchEthUsd, type PoolMarketSnapshot } from './pricing';
+import { findV2PairToken } from './v2-deployments';
+
+const CURVE_ABI = parseAbi([
+  'function getReserves() view returns (uint256 quoteReserve, uint256 tokenReserve)',
+  'function realQuoteReserve() view returns (uint256)',
+  'function graduationThreshold() view returns (uint256)',
+  'function graduated() view returns (bool)',
+]);
+
+const QUOTER_ABI = [
+  {
+    type: 'function',
+    name: 'quoteExactInputSingle',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        type: 'tuple',
+        name: 'params',
+        components: [
+          { name: 'tokenIn', type: 'address' },
+          { name: 'tokenOut', type: 'address' },
+          { name: 'amountIn', type: 'uint256' },
+          { name: 'fee', type: 'uint24' },
+          { name: 'sqrtPriceLimitX96', type: 'uint160' },
+        ],
+      },
+    ],
+    outputs: [
+      { name: 'amountOut', type: 'uint256' },
+      { name: 'sqrtPriceX96After', type: 'uint160' },
+      { name: 'initializedTicksCrossed', type: 'uint32' },
+      { name: 'gasEstimate', type: 'uint256' },
+    ],
+  },
+] as const;
+
+const FEE_TIERS = [500, 3000, 10000, 100] as const;
+
+export interface V2CurveMarketSnapshot extends PoolMarketSnapshot {
+  progress: number;
+  graduated: boolean;
+  priceInQuote: number;
+}
+
+/**
+ * Spot price + graduation progress for a pre-pool v2 bonding curve.
+ *
+ * Docs: marginal price = quoteReserve / tokenReserve (phantom included).
+ * Progress = realQuoteReserve / graduationThreshold.
+ */
+export async function readV2CurveMarketSnapshot(params: {
+  curve: Address;
+  pairToken: Address;
+  supplyWei: bigint;
+}): Promise<V2CurveMarketSnapshot> {
+  const [reserves, realQuote, threshold, graduated, ethUsd, quoteUsd] =
+    await Promise.all([
+      robinhoodPublicClient.readContract({
+        address: params.curve,
+        abi: CURVE_ABI,
+        functionName: 'getReserves',
+      }),
+      robinhoodPublicClient.readContract({
+        address: params.curve,
+        abi: CURVE_ABI,
+        functionName: 'realQuoteReserve',
+      }),
+      robinhoodPublicClient.readContract({
+        address: params.curve,
+        abi: CURVE_ABI,
+        functionName: 'graduationThreshold',
+      }),
+      robinhoodPublicClient
+        .readContract({
+          address: params.curve,
+          abi: CURVE_ABI,
+          functionName: 'graduated',
+        })
+        .catch(() => false),
+      fetchEthUsd(),
+      quoteTokenUsd(params.pairToken),
+    ]);
+
+  const [quoteReserve, tokenReserve] = reserves;
+  const decimals = findV2PairToken(params.pairToken)?.decimals ?? 18;
+
+  const priceInQuote =
+    tokenReserve > 0n
+      ? Number(formatUnits(quoteReserve, decimals)) /
+        Number(formatUnits(tokenReserve, 18))
+      : 0;
+
+  const priceUsd = priceInQuote * quoteUsd;
+  const supplyTokens = Number(formatUnits(params.supplyWei, 18));
+  const marketCapUsd = priceUsd * supplyTokens;
+
+  const progress =
+    threshold > 0n ? Number((realQuote * 10_000n) / threshold) / 10_000 : 0;
+
+  // Spot in WETH terms when we know quote→ETH (display helpers expect it).
+  const priceInWeth = ethUsd > 0 ? priceUsd / ethUsd : 0;
+
+  return {
+    priceInWeth,
+    priceUsd,
+    marketCapUsd,
+    fdvUsd: marketCapUsd,
+    ethUsd,
+    sqrtPriceX96: '0',
+    progress: Math.min(Math.max(progress, 0), 1),
+    graduated: Boolean(graduated) || (threshold > 0n && realQuote >= threshold),
+    priceInQuote,
+  };
+}
+
+/** USD per 1 whole unit of a v2 pair token. */
+async function quoteTokenUsd(pairToken: Address): Promise<number> {
+  if (pairToken.toLowerCase() === PONS_WETH.toLowerCase()) {
+    return fetchEthUsd();
+  }
+
+  const pair = findV2PairToken(pairToken);
+  if (pair?.symbol === 'USDG') return 1;
+
+  // Equity tokens rarely have usable WETH depth on pons — prefer Robinhood quotes.
+  if (pair) {
+    const fromApi = await fetchRobinhoodTokenUsd(pair.symbol);
+    if (fromApi > 0) return fromApi;
+  }
+
+  return quoteViaWeth(pairToken, pair?.decimals ?? 18);
+}
+
+async function fetchRobinhoodTokenUsd(symbol: string): Promise<number> {
+  try {
+    const res = await fetch(
+      `https://api.robinhood.com/rhj/prices/${encodeURIComponent(symbol)}`,
+      { next: { revalidate: 60 } },
+    );
+    if (!res.ok) return 0;
+    const data = (await res.json()) as {
+      quotes?: Array<{ bid?: string; ask?: string }>;
+    };
+    const quote = data.quotes?.[0];
+    const bid = Number(quote?.bid);
+    const ask = Number(quote?.ask);
+    if (Number.isFinite(bid) && Number.isFinite(ask) && bid > 0 && ask > 0) {
+      return (bid + ask) / 2;
+    }
+    if (Number.isFinite(bid) && bid > 0) return bid;
+    if (Number.isFinite(ask) && ask > 0) return ask;
+    return 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function quoteViaWeth(pairToken: Address, decimals: number): Promise<number> {
+  const amountIn = 10n ** BigInt(decimals);
+  const ethUsd = await fetchEthUsd();
+  if (ethUsd <= 0) return 0;
+
+  for (const fee of FEE_TIERS) {
+    try {
+      const { result } = await robinhoodPublicClient.simulateContract({
+        address: PONS_QUOTER_V2,
+        abi: QUOTER_ABI,
+        functionName: 'quoteExactInputSingle',
+        args: [
+          {
+            tokenIn: pairToken,
+            tokenOut: PONS_WETH,
+            amountIn,
+            fee,
+            sqrtPriceLimitX96: 0n,
+          },
+        ],
+      });
+      const wethOut = Number(formatUnits(result[0], 18));
+      if (wethOut > 0) return wethOut * ethUsd;
+    } catch {
+      // try next fee tier
+    }
+  }
+
+  return 0;
+}

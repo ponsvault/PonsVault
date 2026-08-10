@@ -12,6 +12,7 @@ import { readGraduationStatus, readTokenOnchainMetadata } from './token-state';
 import { isToken0Ordering } from './trades';
 import type { PonsLaunchRecord, VaultStat } from './types';
 import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
+import { readV2CurveMarketSnapshot } from './v2-pricing';
 
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from './vault-state';
 
@@ -126,47 +127,69 @@ export async function enrichLaunchRecord(
     ]);
 
     const isToken0 = resolved?.launched.isToken0 ?? isToken0Ordering(token);
-    const supplyWei = resolved?.launched.supply ?? BigInt(PONS_TOTAL_SUPPLY);
+    // v2 factory does not return supply — treat 0 as unset.
+    const supplyWei =
+      resolved?.launched.supply && resolved.launched.supply > 0n
+        ? resolved.launched.supply
+        : BigInt(PONS_TOTAL_SUPPLY);
     const factory = resolved?.factory;
 
     const isV2 = resolved?.kind === 'v2';
+    const v2Curve =
+      isV2 && resolved?.launched.curve ? resolved.launched.curve : null;
 
-    const [market, rawGraduation, vaultStats] = await Promise.all([
-      // v2 curves are not Uniswap v3 pools — skip the v3 snapshot until graduated.
-      !isV2 && metadata.pool
-        ? readPoolMarketSnapshot({
-            pool: metadata.pool,
-            isToken0,
+    const emptyMarket = {
+      priceInWeth: 0,
+      priceUsd: 0,
+      marketCapUsd: 0,
+      fdvUsd: 0,
+      ethUsd: 0,
+    };
+
+    const [marketOrCurve, vaultStats] = await Promise.all([
+      v2Curve
+        ? readV2CurveMarketSnapshot({
+            curve: v2Curve,
+            pairToken: resolved!.launched.pairedToken,
             supplyWei,
           }).catch(() => ({
-            priceInWeth: 0,
-            priceUsd: 0,
-            marketCapUsd: 0,
-            fdvUsd: 0,
-            ethUsd: 0,
-          }))
-        : Promise.resolve({
-            priceInWeth: 0,
-            priceUsd: 0,
-            marketCapUsd: 0,
-            fdvUsd: 0,
-            ethUsd: 0,
-          }),
-      !isV2 && factory
-        ? readGraduationStatus(token, factory).catch(() => ({
-            pairedPrincipal: 0n,
-            threshold: 0n,
-            graduated: false,
+            ...emptyMarket,
             progress: 0,
-          }))
-        : Promise.resolve({
-            pairedPrincipal: 0n,
-            threshold: 0n,
             graduated: false,
-            progress: 0,
-          }),
+            priceInQuote: 0,
+          }))
+        : !isV2 && metadata.pool
+          ? readPoolMarketSnapshot({
+              pool: metadata.pool,
+              isToken0,
+              supplyWei,
+            }).catch(() => emptyMarket)
+          : Promise.resolve(emptyMarket),
       readVaultStat(launch.vault),
     ]);
+
+    const market = marketOrCurve;
+    const rawGraduation =
+      v2Curve && 'progress' in marketOrCurve
+        ? {
+            pairedPrincipal: 0n,
+            threshold: 0n,
+            graduated: Boolean(marketOrCurve.graduated),
+            progress: marketOrCurve.progress,
+          }
+        : !isV2 && factory
+          ? await readGraduationStatus(token, factory).catch(() => ({
+              pairedPrincipal: 0n,
+              threshold: 0n,
+              graduated: false,
+              progress: 0,
+            }))
+          : {
+              pairedPrincipal: 0n,
+              threshold: 0n,
+              graduated: false,
+              progress: 0,
+            };
 
     const graduation = !isV2
       ? await resolveStickyGraduation({
@@ -183,8 +206,8 @@ export async function enrichLaunchRecord(
       ...launch,
       ...vaultStats,
       pool: metadata.pool,
-      marketCapUsd: market.marketCapUsd,
-      priceUsd: market.priceUsd,
+      marketCapUsd: market.marketCapUsd > 0 ? market.marketCapUsd : null,
+      priceUsd: market.priceUsd > 0 ? market.priceUsd : null,
       graduated: graduation.graduated,
       // Graduated tokens always report 100% — current pool WETH can be lower.
       graduationProgressPct: graduation.graduated

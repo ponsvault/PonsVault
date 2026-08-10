@@ -20,7 +20,11 @@ import {
   vaultLauncherAddress,
 } from '@/lib/pons/vault';
 import { PONSVAULT_V2_DEPLOYMENT, isV2VaultLauncherDeployed } from '@/lib/pons/v2-deployments';
-import { PONSVAULT_V2_LAUNCHER_ABI, v2VaultLauncherAddress } from '@/lib/pons/v2-vault';
+import {
+  PONSVAULT_V2_LAUNCHER_ABI,
+  PONS_V2_VAULT_FACTORY_ABI,
+  v2VaultLauncherAddress,
+} from '@/lib/pons/v2-vault';
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from '@/lib/pons/vault-state';
 import { listPonsVaultLaunches } from '@/lib/launch-registry/store';
 import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
@@ -337,6 +341,31 @@ async function discoverVaultsOnChain(): Promise<VaultRef[]> {
       }
     } catch {
       // Same: discovery is best-effort.
+    }
+
+    // User-as-deployer launches skip the launcher and emit VaultCreated on each factory.
+    for (const factory of [
+      PONSVAULT_V2_DEPLOYMENT.buybackFactory,
+      PONSVAULT_V2_DEPLOYMENT.stakingFactory,
+      PONSVAULT_V2_DEPLOYMENT.rwaFactory,
+    ]) {
+      if (!factory || factory.length !== 42) continue;
+      try {
+        const logs = await robinhoodPublicClient.getContractEvents({
+          address: factory as `0x${string}`,
+          abi: PONS_V2_VAULT_FACTORY_ABI,
+          eventName: 'VaultCreated',
+          fromBlock: PONSVAULT_V2_DEPLOYMENT.startBlock,
+          toBlock: 'latest',
+        });
+        for (const log of logs) {
+          const { token, vault } = log.args;
+          if (!token || !vault) continue;
+          found.push({ token, vault, symbol: '' });
+        }
+      } catch {
+        // Best-effort per factory.
+      }
     }
   }
 

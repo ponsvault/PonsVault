@@ -3,7 +3,6 @@ import { NextResponse } from 'next/server';
 import { listPonsVaultLaunches } from '@/lib/launch-registry/store';
 import { discoverLaunchesOnChain } from '@/lib/pons/discover-launches';
 import { enrichLaunchRecords } from '@/lib/pons/explore-enrichment';
-import { PONSVAULT_DEPLOYMENT } from '@/lib/pons/deployments';
 import type { VaultTemplateId } from '@/lib/pons/vault';
 
 type ExploreLaunchBase = {
@@ -42,8 +41,9 @@ export async function GET(request: Request) {
         symbol: launch.symbol,
         description: '',
         logo: '',
-        deployer: PONSVAULT_DEPLOYMENT.launcher,
-        feeWallet: launch.creator,
+        deployer: launch.deployer,
+        // Creator fees are redirected to the vault at launch.
+        feeWallet: launch.vault,
         vault: launch.vault,
         vaultTemplate: launch.vaultTemplate,
         launchedAt: launch.launchedAt,
