@@ -27,12 +27,15 @@ async function main() {
     );
   }
 
-  const bad = results.filter((r) => !r.tradeable);
-  if (bad.length > 0) {
-    console.log(`\n${bad.length} curated asset(s) are no longer tradeable and should be removed.`);
+  const viaWeth = results.filter((r) => r.tradeable);
+  const sameAssetOnly = results.filter((r) => !r.tradeable);
+  console.log(
+    `\n${viaWeth.length} asset(s) buyable via WETH; ` +
+      `${sameAssetOnly.length} need same-as-pair (direct dividend, no swap).`,
+  );
+  if (viaWeth.length === 0) {
+    console.log('No WETH markets are deep enough — only same-as-pair RWA launches will work.');
     process.exitCode = 1;
-  } else {
-    console.log('\nEvery curated asset still converts a round at a sane price.');
   }
 }
 

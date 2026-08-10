@@ -245,6 +245,9 @@ export function validateV2VaultInput(
   if (input.vaultTemplate === 'staking') return null;
 
   if (input.vaultTemplate === 'rwa') {
+    // Same-asset (pair SPCX + dividend SPCX) needs no WETH pool — the vault
+    // allocates quote directly. Cross-asset picks are gated in the form by live
+    // depth; the contract still requires a pool when a swap is needed.
     if (!findRwaAsset(input.vaultRwaAsset.trim())) {
       return 'Choose one of the supported stocks for this vault.';
     }

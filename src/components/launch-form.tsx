@@ -147,14 +147,7 @@ export function LaunchForm() {
   });
 
   const rwaAssets = useMemo(() => rwa?.assets ?? [], [rwa]);
-  const rwaTradeable = useMemo(() => rwaAssets.filter((a) => a.tradeable), [rwaAssets]);
-  const rwaAvailable = Boolean(rwa?.registered) && rwaTradeable.length > 0;
   const rwaUnknown = rwa !== undefined && !rwa.complete;
-
-  const selectedRwaAsset = useMemo(
-    () => rwaAssets.find((a) => a.address.toLowerCase() === form.vaultRwaAsset.toLowerCase()),
-    [rwaAssets, form.vaultRwaAsset],
-  );
 
   const approvedPairs = useMemo(() => {
     if (!status) {
@@ -176,6 +169,45 @@ export function LaunchForm() {
       PONS_V2_PAIR_TOKENS[0]
     );
   }, [approvedPairs, form.pairToken, status]);
+
+  const isRwaOptionOpen = (asset: RwaAssetOption) =>
+    asset.tradeable ||
+    asset.address.toLowerCase() === selectedPair.address.toLowerCase();
+
+  /** Buyable via WETH for this pair, or same-as-pair (direct allocation). */
+  const rwaOptionsForPair = useMemo(
+    () => rwaAssets.filter(isRwaOptionOpen),
+    // isRwaOptionOpen closes over selectedPair.address
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rwaAssets, selectedPair.address],
+  );
+
+  // Template is launchable if any stock has a WETH market, or any equity pair
+  // can do same-asset dividends (every equity pair is in the curated list).
+  const rwaAvailable =
+    Boolean(rwa?.registered) &&
+    (rwaAssets.some((a) => a.tradeable) ||
+      approvedPairs.some((p) =>
+        rwaAssets.some((a) => a.address.toLowerCase() === p.address.toLowerCase()),
+      ));
+
+  const selectedRwaAsset = useMemo(
+    () => rwaAssets.find((a) => a.address.toLowerCase() === form.vaultRwaAsset.toLowerCase()),
+    [rwaAssets, form.vaultRwaAsset],
+  );
+
+  const rwaIsDirect = Boolean(
+    selectedRwaAsset &&
+      selectedRwaAsset.address.toLowerCase() === selectedPair.address.toLowerCase(),
+  );
+
+  function pickDefaultRwaAsset(pairAddress: string, assets: RwaAssetOption[]): string {
+    const same = assets.find(
+      (a) => a.address.toLowerCase() === pairAddress.toLowerCase(),
+    );
+    if (same) return same.address;
+    return assets.find((a) => a.tradeable)?.address ?? '';
+  }
 
   const uploadMutation = useMutation({
     mutationFn: uploadTokenImage,
@@ -234,7 +266,39 @@ export function LaunchForm() {
   const selectedVault = VAULT_TEMPLATES.find((entry) => entry.id === form.vaultTemplate);
 
   function selectVault(id: VaultTemplateId) {
-    setForm((f) => ({ ...f, vaultTemplate: id }));
+    setForm((f) => {
+      const next = { ...f, vaultTemplate: id };
+      if (id === 'rwa') {
+        const currentOk = rwaAssets.some(
+          (a) =>
+            a.address.toLowerCase() === f.vaultRwaAsset.toLowerCase() &&
+            (a.tradeable ||
+              a.address.toLowerCase() === selectedPair.address.toLowerCase()),
+        );
+        if (!currentOk) {
+          next.vaultRwaAsset = pickDefaultRwaAsset(selectedPair.address, rwaAssets);
+        }
+      }
+      return next;
+    });
+  }
+
+  function selectPairToken(pairAddress: string) {
+    setForm((f) => {
+      const next = { ...f, pairToken: pairAddress };
+      if (f.vaultTemplate === 'rwa') {
+        const stillOk = rwaAssets.some(
+          (asset) =>
+            asset.address.toLowerCase() === f.vaultRwaAsset.toLowerCase() &&
+            (asset.tradeable ||
+              asset.address.toLowerCase() === pairAddress.toLowerCase()),
+        );
+        if (!stillOk) {
+          next.vaultRwaAsset = pickDefaultRwaAsset(pairAddress, rwaAssets);
+        }
+      }
+      return next;
+    });
   }
 
   const primaryAction = useMemo(() => {
@@ -637,34 +701,26 @@ export function LaunchForm() {
             />
           </label>
 
-          <div className="launchpad-field launchpad-field-wide">
+          <label className="launchpad-field launchpad-field-wide">
             <span className="launchpad-label">Pairing asset</span>
+            <select
+              className="launchpad-input"
+              aria-label="Pairing asset"
+              value={selectedPair.address}
+              onChange={(e) => selectPairToken(e.target.value)}
+            >
+              {approvedPairs.map((pair) => (
+                <option key={pair.address} value={pair.address}>
+                  {pair.symbol} — {pair.name}
+                </option>
+              ))}
+            </select>
             <p className="launchpad-field-note">
-              Buyers spend this asset on the curve, and creator fees arrive in it. Native ETH is
+              Buyers spend this on the curve, and creator fees arrive in it. Pair with the same
+              stock as an RWA dividend to pay that stock out with no Uniswap buy. Native ETH is
               not open yet.
             </p>
-            <div className="vault-picker" role="radiogroup" aria-label="Pairing asset">
-              {approvedPairs.map((pair) => {
-                const selected =
-                  selectedPair.address.toLowerCase() === pair.address.toLowerCase();
-                return (
-                  <button
-                    key={pair.address}
-                    type="button"
-                    role="radio"
-                    aria-checked={selected}
-                    onClick={() => setForm((f) => ({ ...f, pairToken: pair.address }))}
-                    className={cn('vault-option', selected && 'is-selected')}
-                  >
-                    <span className="vault-option-head">
-                      <span className="vault-option-name">{pair.symbol}</span>
-                    </span>
-                    <span className="vault-option-tagline">{pair.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          </label>
 
           <div className="launchpad-field launchpad-field-wide">
             <span className="launchpad-label">Vault</span>
@@ -846,55 +902,56 @@ export function LaunchForm() {
           {form.vaultTemplate === 'rwa' ? (
             <div className="launchpad-field launchpad-field-wide vault-config">
               <p className="launchpad-field-note">
-                Fees in {selectedPair.symbol} buy a tokenized stock, which holders claim by balance.
-                There is nothing to stake. The token side of the fees is burned.
+                {rwaIsDirect
+                  ? `Fees arrive as ${selectedPair.symbol} and are paid out as ${selectedPair.symbol} dividends — no Uniswap buy needed.`
+                  : `Fees in ${selectedPair.symbol} buy a tokenized stock, which holders claim by balance. There is nothing to stake. The token side of the fees is burned.`}
               </p>
 
-              <div className="launchpad-field">
-                <span className="launchpad-label">Stock the fees buy</span>
-                <div className="rwa-asset-picker" role="radiogroup" aria-label="Tokenized stock">
+              <label className="launchpad-field">
+                <span className="launchpad-label">
+                  {rwaIsDirect ? 'Dividend asset' : 'Stock the fees buy'}
+                </span>
+                <select
+                  className="launchpad-input"
+                  aria-label="Dividend stock"
+                  value={form.vaultRwaAsset}
+                  onChange={(e) => setForm((f) => ({ ...f, vaultRwaAsset: e.target.value }))}
+                >
+                  <option value="" disabled>
+                    {rwaLoading || rwaUnknown ? 'Checking markets…' : 'Choose a stock'}
+                  </option>
                   {rwaAssets.map((asset) => {
-                    const selected =
-                      form.vaultRwaAsset.toLowerCase() === asset.address.toLowerCase();
-
+                    const sameAsPair =
+                      asset.address.toLowerCase() === selectedPair.address.toLowerCase();
+                    const selectable = asset.tradeable || sameAsPair;
+                    const route = sameAsPair
+                      ? 'direct — same as pair'
+                      : asset.tradeable
+                        ? 'via WETH pool'
+                        : 'needs same-as-pair or deeper WETH pool';
                     return (
-                      <button
-                        key={asset.address}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        disabled={!asset.tradeable}
-                        onClick={() => setForm((f) => ({ ...f, vaultRwaAsset: asset.address }))}
-                        className={cn('rwa-asset-option', selected && 'is-selected')}
-                      >
-                        <span className="rwa-asset-head">
-                          <span className="rwa-asset-symbol">{asset.symbol}</span>
-                          {!asset.tradeable ? <span className="pv-badge">Unavailable</span> : null}
-                        </span>
-                        <span className="rwa-asset-name">{asset.name}</span>
-                        {asset.tradeable ? (
-                          <span className="rwa-asset-rate">
-                            {formatUnits(BigInt(asset.perRound), asset.decimals).slice(0, 8)}{' '}
-                            {asset.symbol} per round (WETH depth check)
-                          </span>
-                        ) : (
-                          <span className="rwa-asset-rate">{asset.reason}</span>
-                        )}
-                      </button>
+                      <option key={asset.address} value={asset.address} disabled={!selectable}>
+                        {asset.symbol} — {asset.name} ({route})
+                      </option>
                     );
                   })}
-                </div>
+                </select>
                 <p className="launchpad-field-note">
                   {selectedRwaAsset
-                    ? 'Fixed forever once this launches — the vault can never be pointed at a different stock.'
-                    : 'Pick one. This can never be changed after launch.'}
+                    ? rwaIsDirect
+                      ? `Pairing is ${selectedPair.symbol}, so the vault pays ${selectedPair.symbol} directly with no swap. Fixed forever at launch.`
+                      : `Fees in ${selectedPair.symbol} will buy ${selectedRwaAsset.symbol} on Uniswap. Fixed forever at launch.`
+                    : rwaOptionsForPair.length === 0
+                      ? `No dividend stock works with ${selectedPair.symbol} right now — pick an equity pair (e.g. SPCX) for direct payout, or a pair that can buy GME/NVDA.`
+                      : 'Pick one. Same-as-pair pays that stock directly; other stocks need a live WETH market.'}
                 </p>
-              </div>
+              </label>
 
               <div className="vault-config-row">
                 <label className="launchpad-field">
                   <span className="launchpad-label">
-                    Minimum fees before a purchase ({selectedPair.symbol})
+                    Minimum fees before a{' '}
+                    {rwaIsDirect ? 'dividend round' : 'purchase'} ({selectedPair.symbol})
                   </span>
                   <input
                     className="launchpad-input"
@@ -905,8 +962,9 @@ export function LaunchForm() {
                     }
                   />
                   <p className="launchpad-field-note">
-                    The vault waits until this much {selectedPair.symbol} has built up, then buys
-                    the stock and opens a round holders can claim from.
+                    {rwaIsDirect
+                      ? `The vault waits until this much ${selectedPair.symbol} has built up, then opens a round holders can claim.`
+                      : `The vault waits until this much ${selectedPair.symbol} has built up, then buys the stock and opens a round holders can claim from.`}
                   </p>
                 </label>
               </div>

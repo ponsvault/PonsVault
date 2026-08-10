@@ -34,7 +34,8 @@ export const PONS_V2 = {
  *
  * Only tokens that pass `approvedPairTokens` + non-zero economics on the live
  * factory belong here. Native ETH / WETH are intentionally absent — both are
- * still closed on-chain.
+ * still closed on-chain. When pons adds a new approved equity, add it here and
+ * it also becomes a same-asset RWA dividend option via `CURATED_RWA_ASSETS`.
  */
 export const PONS_V2_PAIR_TOKENS = [
   {
@@ -77,6 +78,18 @@ export const PONS_V2_PAIR_TOKENS = [
     symbol: 'SPCX',
     name: 'SpaceX Class A • Robinhood Token',
     address: '0x4a0e65a3eccec6dbe60ae065f2e7bb85fae35eea',
+    decimals: 18,
+  },
+  {
+    symbol: 'AMD',
+    name: 'AMD • Robinhood Token',
+    address: '0x86923f96303D656E4aa86D9d42D1e57ad2023fdC',
+    decimals: 18,
+  },
+  {
+    symbol: 'SNDK',
+    name: 'Sandisk Corporation • Robinhood Token',
+    address: '0xB90A19fF0Af67f7779afF50A882A9CfF42446400',
     decimals: 18,
   },
   {

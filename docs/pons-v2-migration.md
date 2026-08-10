@@ -5,7 +5,7 @@
 - Current factory: `0x7eD598BcEf8bd9Edd8C97A195C6d13f40801EC7e` (docs “Deployed addresses”).
 - The earlier factory `0x7E1EAbd5…` was replaced — do not use it.
 - On the current factory: `launchEnabled = true`, `canLaunch(any) = true` → **public launching is open**.
-- Approved quote assets include AAPL, NVDA, TSLA, GOOGL, GME, SPY, SPCX, USDG. Native ETH / WETH still closed.
+- Approved quote assets include AAPL, NVDA, TSLA, GOOGL, GME, SPY, SPCX, AMD, SNDK, USDG. Native ETH / WETH still closed. Equity pairs can also be used as same-asset RWA dividends (no WETH pool required).
 - PonsVault v1 is unchanged and still works.
 
 ## What we built

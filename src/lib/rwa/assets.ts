@@ -1,58 +1,61 @@
 import type { Address } from 'viem';
 
+import { PONS_V2_PAIR_TOKENS } from '@/lib/pons/v2-deployments';
+
 /**
  * The tokenized assets an RWA vault may be pointed at.
  *
- * Curated rather than open, because the vault contract only refuses a pool that
- * is completely empty and that is a much lower bar than being tradeable. Most
- * of the equities on this chain sit just above it: AAPL has 28,000 holders and
- * a WETH pool holding a few wei, TSLA's holds 0.007 WETH and cannot even be
- * quoted. A vault pointed at either would pass every check at launch, then
- * spend each round shoving the price up against itself and hand holders close
- * to nothing — and the parameters are immutable, so the creator could never fix
- * it. Offering only assets that have been measured is the difference between a
- * dividend and a slow leak.
+ * Two ways an asset can pay out:
+ * 1. **Cross-asset** — fees arrive in the pair quote, then the vault buys this
+ *    stock via WETH on Uniswap. Only deep WETH pools survive the live check.
+ * 2. **Same-asset** — pair quote == dividend asset. The vault allocates fees as
+ *    dividends with no swap (works even when the WETH pool is empty).
  *
- * These tokens are traded mainly through Robinhood itself rather than on-chain,
- * so DEX depth here reflects what someone bothered to seed a pool with, not the
- * real market. It follows that this list is a snapshot: run
- * `scripts/rwa-equities.ts` to re-measure, and treat {assessAsset} as the
- * authority at launch time rather than this array.
+ * Every equity that is also an approved v2 pair belongs here so creators can
+ * always take the same-asset path. USDG is a stable, not a stock dividend, so
+ * it stays pairing-only.
+ *
+ * DEX depth is measured at request time by {@link assessAsset}; this list is
+ * not a liquidity guarantee.
  */
 export interface RwaAsset {
   symbol: string;
   /** Issuer's name, as the token itself reports it. */
   name: string;
   address: Address;
-  /** Deepest WETH tier at the time of measuring. */
+  /** Preferred WETH fee tier when a swap route is required. */
   poolFee: number;
   decimals: number;
 }
 
-export const CURATED_RWA_ASSETS: readonly RwaAsset[] = [
-  {
-    symbol: 'GME',
-    name: 'GameStop',
-    address: '0x1b0E319c6A659F002271B69dB8A7df2F911c153E',
-    poolFee: 500,
-    decimals: 18,
-  },
-  {
-    symbol: 'NVDA',
-    name: 'NVIDIA',
-    address: '0xd0601CE157Db5bdC3162BbaC2a2C8aF5320D9EEC',
-    poolFee: 500,
-    decimals: 18,
-  },
-  {
-    symbol: 'SPCX',
-    name: 'SpaceX Class A',
-    address: '0x4a0E65A3EcceC6dBe60AE065F2e7bb85Fae35eEa',
-    poolFee: 500,
-    decimals: 18,
-  },
-] as const;
+/** Pairing assets that are stocks (not USDG / stables). */
+const EQUITY_PAIR_TOKENS = PONS_V2_PAIR_TOKENS.filter((p) => p.symbol !== 'USDG');
+
+/**
+ * Curated dividend targets = every equity pairing token, plus any stock we
+ * want to offer via WETH buy that is not (yet) a pair.
+ *
+ * Built from the pair list so adding a new equity pair automatically unlocks
+ * same-asset RWA dividends for it.
+ */
+export const CURATED_RWA_ASSETS: readonly RwaAsset[] = EQUITY_PAIR_TOKENS.map((pair) => ({
+  symbol: pair.symbol,
+  name: pair.name.replace(/\s*•\s*Robinhood Token\s*$/i, '').trim() || pair.name,
+  address: pair.address as Address,
+  poolFee: 500,
+  decimals: pair.decimals,
+}));
 
 export function findRwaAsset(address: string): RwaAsset | undefined {
   return CURATED_RWA_ASSETS.find((a) => a.address.toLowerCase() === address.toLowerCase());
+}
+
+/**
+ * When the launch quote asset is the same stock the vault pays out, the vault
+ * allocates fees as-is — no Uniswap buy.
+ */
+export function isSameAssetRwaDividend(pairToken: string, rwaAsset: string): boolean {
+  const pair = pairToken.trim().toLowerCase();
+  const asset = rwaAsset.trim().toLowerCase();
+  return pair.length === 42 && asset.length === 42 && pair === asset;
 }

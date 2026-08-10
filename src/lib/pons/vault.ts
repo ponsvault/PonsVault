@@ -125,9 +125,8 @@ export const STAKING_MAX_LOCK_DAYS = 365;
 /**
  * Starting values for the RWA Dividend config.
  *
- * No default asset. The choice is permanent and the three that are offered
- * differ in ways a creator should look at rather than inherit, so the form
- * makes them pick.
+ * No default asset — the form picks same-as-pair when available, otherwise the
+ * first stock with a live WETH market. The choice is permanent at launch.
  */
 export const RWA_DEFAULTS = {
   asset: '',
