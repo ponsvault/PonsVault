@@ -26,14 +26,16 @@ function sortLaunches(launches: PonsLaunchRecord[], sort: ExploreSort): PonsLaun
   });
 }
 
-/** Compact token count: 14391858.74 → "14.4M". */
+/** Compact token count: 14391858.74 → "14.4M", 0.245 → "0.25". */
 function formatCompact(value: string): string {
   const amount = Number(value);
   if (!Number.isFinite(amount) || amount === 0) return '0';
   if (amount >= 1_000_000_000) return `${(amount / 1_000_000_000).toFixed(2)}B`;
   if (amount >= 1_000_000) return `${(amount / 1_000_000).toFixed(1)}M`;
   if (amount >= 1_000) return `${(amount / 1_000).toFixed(1)}K`;
-  return amount.toFixed(0);
+  if (amount >= 1) return amount.toFixed(2);
+  if (amount >= 0.01) return amount.toFixed(2);
+  return amount.toFixed(4);
 }
 
 function templateName(id: string | null | undefined): string | null {
@@ -178,7 +180,7 @@ export function ExploreGrid() {
                             <Coins className="h-3 w-3" strokeWidth={2} />
                           )}
                           {formatCompact(stat.amount)} {stat.unit ?? launch.symbol}{' '}
-                          {VAULT_STAT_VERB[stat.kind]}
+                          {stat.verb ?? VAULT_STAT_VERB[stat.kind]}
                           {/* A dividend is paid in a stock, so a share of this
                               token's supply would be a meaningless number. */}
                           {stat.unit ? null : ` · ${stat.percent.toFixed(2)}%`}

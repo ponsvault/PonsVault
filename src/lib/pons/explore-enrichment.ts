@@ -5,6 +5,7 @@ import { findRwaAsset } from '@/lib/rwa/assets';
 
 import { robinhoodPublicClient } from './client';
 import { PONS_TOTAL_SUPPLY } from './constants';
+import { prefetchEquityTokenUsd } from './equity-usd';
 import { resolveLaunchedToken } from './factory';
 import { readPoolMarketSnapshot } from './pricing';
 import { resolveStickyGraduation } from './graduation-sticky';
@@ -12,6 +13,7 @@ import { readGraduationStatus, readTokenOnchainMetadata } from './token-state';
 import { isToken0Ordering } from './trades';
 import type { PonsLaunchRecord, VaultStat } from './types';
 import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
+import { findV2PairToken } from './v2-deployments';
 import { readV2CurveMarketSnapshot } from './v2-pricing';
 
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from './vault-state';
@@ -35,7 +37,7 @@ async function readVaultStat(vault: string | null | undefined): Promise<{ vaultS
     // measured in that stock's units and a share of the token supply says
     // nothing about it. Reading `totalTokensBurned` here would simply revert.
     if (template === 'rwa') {
-      const [config, distributed] = await Promise.all([
+      const [config, distributed, pending] = await Promise.all([
         robinhoodPublicClient.readContract({
           address,
           abi: PONS_RWA_VAULT_ABI,
@@ -46,16 +48,59 @@ async function readVaultStat(vault: string | null | undefined): Promise<{ vaultS
           abi: PONS_RWA_VAULT_ABI,
           functionName: 'totalRwaDistributed',
         }),
+        robinhoodPublicClient
+          .readContract({
+            address,
+            abi: PONS_RWA_VAULT_ABI,
+            functionName: 'pendingQuote',
+          })
+          .catch(async () => {
+            // Pre-upgrade beacons: idle quote + escrow only.
+            try {
+              const [idle, escrow] = await Promise.all([
+                robinhoodPublicClient.readContract({
+                  address,
+                  abi: PONS_RWA_VAULT_ABI,
+                  functionName: 'idleBalances',
+                }),
+                robinhoodPublicClient.readContract({
+                  address,
+                  abi: PONS_RWA_VAULT_ABI,
+                  functionName: 'pendingEscrowQuote',
+                }),
+              ]);
+              return idle[0] + escrow;
+            } catch {
+              return 0n;
+            }
+          }),
       ]);
 
       const asset = findRwaAsset(config[0]);
+      const decimals = asset?.decimals ?? 18;
+      const unit = asset?.symbol ?? 'stock';
+
+      // Prefer live fees waiting — Explore used to only show paid-out rounds,
+      // which looked empty even when the curve had accrued creator fees.
+      if (pending > 0n) {
+        return {
+          vaultStat: {
+            kind: 'dividend',
+            amount: formatUnits(pending, decimals),
+            percent: 0,
+            unit,
+            verb: 'fees waiting',
+          },
+        };
+      }
 
       return {
         vaultStat: {
           kind: 'dividend',
-          amount: formatUnits(distributed, asset?.decimals ?? 18),
+          amount: formatUnits(distributed, decimals),
           percent: 0,
-          unit: asset?.symbol ?? 'stock',
+          unit,
+          verb: 'paid out',
         },
       };
     }
@@ -88,6 +133,69 @@ async function readVaultStat(vault: string | null | undefined): Promise<{ vaultS
             abi: PONS_VAULT_ABI,
             functionName: 'totalTokensBurned',
           });
+
+    // When nothing has been burned/staked yet, surface accrued quote fees so
+    // v2 cards are not stuck on "Nothing burned yet" while the curve has fees.
+    if (amountWei === 0n) {
+      const pending = await robinhoodPublicClient
+        .readContract({
+          address,
+          abi: [
+            {
+              type: 'function',
+              name: 'pendingQuote',
+              stateMutability: 'view',
+              inputs: [],
+              outputs: [{ type: 'uint256' }],
+            },
+          ] as const,
+          functionName: 'pendingQuote',
+        })
+        .catch(async () => {
+          try {
+            const idle = await robinhoodPublicClient.readContract({
+              address,
+              abi: PONS_VAULT_ABI,
+              functionName: 'idleBalances',
+            });
+            return idle[0];
+          } catch {
+            return 0n;
+          }
+        });
+
+      if (pending > 0n) {
+        const quoteAsset = await robinhoodPublicClient
+          .readContract({
+            address,
+            abi: [
+              {
+                type: 'function',
+                name: 'quoteAsset',
+                stateMutability: 'view',
+                inputs: [],
+                outputs: [{ type: 'address' }],
+              },
+            ] as const,
+            functionName: 'quoteAsset',
+          })
+          .catch(() => null);
+        const quoteSymbol = quoteAsset
+          ? (findRwaAsset(quoteAsset)?.symbol ??
+            findV2PairToken(quoteAsset)?.symbol)
+          : null;
+
+        return {
+          vaultStat: {
+            kind: template === 'staking' ? 'stake' : 'burn',
+            amount: formatEther(pending),
+            percent: 0,
+            unit: quoteSymbol ?? 'fees',
+            verb: 'fees waiting',
+          },
+        };
+      }
+    }
 
     return {
       vaultStat: {
@@ -244,5 +352,18 @@ export async function enrichLaunchRecords(
     > & { everGraduated?: boolean }
   >,
 ): Promise<PonsLaunchRecord[]> {
+  // Resolve each launch's factory row once so we can warm equity USD prices
+  // (one Chainlink read per quote symbol) before fanning out card enrichment.
+  const resolved = await Promise.all(
+    launches.map((launch) =>
+      resolveLaunchedToken(launch.token as Address).catch(() => null),
+    ),
+  );
+  await prefetchEquityTokenUsd(
+    resolved
+      .filter((row) => row?.kind === 'v2')
+      .map((row) => row!.launched.pairedToken),
+  );
+
   return Promise.all(launches.map((launch) => enrichLaunchRecord(launch)));
 }

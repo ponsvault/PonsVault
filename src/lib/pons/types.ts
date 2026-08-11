@@ -20,6 +20,8 @@ export interface VaultStat {
    * that applies.
    */
   unit?: string;
+  /** Overrides the default Explore verb (e.g. "fees waiting" vs "paid out"). */
+  verb?: string;
 }
 
 export interface PonsLaunchpadStatus {

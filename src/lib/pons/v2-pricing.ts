@@ -2,6 +2,7 @@ import { formatUnits, parseAbi, type Address } from 'viem';
 
 import { robinhoodPublicClient } from './client';
 import { PONS_QUOTER_V2, PONS_WETH } from './contracts';
+import { fetchEquityTokenUsd } from './equity-usd';
 import { fetchEthUsd, type PoolMarketSnapshot } from './pricing';
 import { findV2PairToken } from './v2-deployments';
 
@@ -127,37 +128,11 @@ async function quoteTokenUsd(pairToken: Address): Promise<number> {
   const pair = findV2PairToken(pairToken);
   if (pair?.symbol === 'USDG') return 1;
 
-  // Equity tokens rarely have usable WETH depth on pons — prefer Robinhood quotes.
-  if (pair) {
-    const fromApi = await fetchRobinhoodTokenUsd(pair.symbol);
-    if (fromApi > 0) return fromApi;
-  }
+  // Chainlink first (works on Vercel); Robinhood REST is often blocked there.
+  const equityUsd = await fetchEquityTokenUsd(pairToken);
+  if (equityUsd > 0) return equityUsd;
 
   return quoteViaWeth(pairToken, pair?.decimals ?? 18);
-}
-
-async function fetchRobinhoodTokenUsd(symbol: string): Promise<number> {
-  try {
-    const res = await fetch(
-      `https://api.robinhood.com/rhj/prices/${encodeURIComponent(symbol)}`,
-      { next: { revalidate: 60 } },
-    );
-    if (!res.ok) return 0;
-    const data = (await res.json()) as {
-      quotes?: Array<{ bid?: string; ask?: string }>;
-    };
-    const quote = data.quotes?.[0];
-    const bid = Number(quote?.bid);
-    const ask = Number(quote?.ask);
-    if (Number.isFinite(bid) && Number.isFinite(ask) && bid > 0 && ask > 0) {
-      return (bid + ask) / 2;
-    }
-    if (Number.isFinite(bid) && bid > 0) return bid;
-    if (Number.isFinite(ask) && ask > 0) return ask;
-    return 0;
-  } catch {
-    return 0;
-  }
 }
 
 async function quoteViaWeth(pairToken: Address, decimals: number): Promise<number> {
