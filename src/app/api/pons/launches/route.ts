@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { listPonsVaultLaunches } from '@/lib/launch-registry/store';
 import { discoverLaunchesOnChain } from '@/lib/pons/discover-launches';
 import { enrichLaunchRecords } from '@/lib/pons/explore-enrichment';
+import type { PonsLaunchRecord } from '@/lib/pons/types';
 import type { VaultTemplateId } from '@/lib/pons/vault';
 
 type ExploreLaunchBase = {
@@ -20,10 +21,23 @@ type ExploreLaunchBase = {
   everGraduated?: boolean;
 };
 
+const RESPONSE_TTL_MS = 20_000;
+const responseCache = new Map<number, { at: number; body: PonsLaunchRecord[] }>();
+
 export async function GET(request: Request) {
   try {
     const limit = Number(new URL(request.url).searchParams.get('limit') ?? '48');
-    const capped = Number.isFinite(limit) ? limit : 48;
+    const capped = Number.isFinite(limit) ? Math.min(Math.max(limit, 1), 96) : 48;
+
+    const cached = responseCache.get(capped);
+    if (cached && Date.now() - cached.at < RESPONSE_TTL_MS) {
+      return NextResponse.json(cached.body, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=40',
+          'X-Explore-Cache': 'hit',
+        },
+      });
+    }
 
     const [recorded, discovered] = await Promise.all([
       listPonsVaultLaunches(capped),
@@ -74,11 +88,18 @@ export async function GET(request: Request) {
       .slice(0, capped);
 
     const enriched = await enrichLaunchRecords(base);
-    return NextResponse.json(enriched);
+    responseCache.set(capped, { at: Date.now(), body: enriched });
+
+    return NextResponse.json(enriched, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=20, stale-while-revalidate=40',
+        'X-Explore-Cache': 'miss',
+      },
+    });
   } catch (error) {
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Failed to load launches' },
-      { status: 500 },
+      { status: 500, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

@@ -6,10 +6,14 @@ import { findRwaAsset } from '@/lib/rwa/assets';
 import { robinhoodPublicClient } from './client';
 import { PONS_TOTAL_SUPPLY } from './constants';
 import { prefetchEquityTokenUsd } from './equity-usd';
-import { resolveLaunchedToken } from './factory';
+import { resolveLaunchedToken, type ResolvedLaunch } from './factory';
 import { readPoolMarketSnapshot } from './pricing';
 import { resolveStickyGraduation } from './graduation-sticky';
-import { readGraduationStatus, readTokenOnchainMetadata } from './token-state';
+import {
+  readGraduationStatus,
+  readTokenOnchainMetadata,
+  type TokenOnchainMetadata,
+} from './token-state';
 import { isToken0Ordering } from './trades';
 import type { PonsLaunchRecord, VaultStat } from './types';
 import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
@@ -18,20 +22,45 @@ import { readV2CurveMarketSnapshot } from './v2-pricing';
 
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from './vault-state';
 
+const EMPTY_METADATA: TokenOnchainMetadata = {
+  name: '',
+  symbol: '',
+  decimals: 18,
+  logo: '',
+  description: '',
+  pool: '0x0000000000000000000000000000000000000000',
+  socials: {
+    twitter: '',
+    telegram: '',
+    discord: '',
+    website: '',
+    farcaster: '',
+  },
+};
+
 /**
  * The headline number for a launch's vault, or null when it has none.
  *
  * Read here rather than on the client so an explore card can show what a vault
  * has actually done without every card opening its own RPC connection.
  */
-async function readVaultStat(vault: string | null | undefined): Promise<{ vaultStat: VaultStat | null }> {
+async function readVaultStat(
+  vault: string | null | undefined,
+  knownTemplate?: string | null,
+): Promise<{ vaultStat: VaultStat | null }> {
   if (!vault) return { vaultStat: null };
   const address = vault as Address;
 
   try {
-    const template = await robinhoodPublicClient
-      .readContract({ address, abi: PONS_VAULT_ABI, functionName: 'template' })
-      .catch(() => 'buyback-burn');
+    const template =
+      knownTemplate === 'rwa' ||
+      knownTemplate === 'staking' ||
+      knownTemplate === 'lottery' ||
+      knownTemplate === 'buyback-burn'
+        ? knownTemplate
+        : await robinhoodPublicClient
+            .readContract({ address, abi: PONS_VAULT_ABI, functionName: 'template' })
+            .catch(() => 'buyback-burn');
 
     // An RWA vault pays out a stock rather than the launch's own token, so it is
     // measured in that stock's units and a share of the token supply says
@@ -225,14 +254,23 @@ export async function enrichLaunchRecord(
     | 'vault'
     | 'vaultTemplate'
   > & { everGraduated?: boolean },
+  preResolved?: ResolvedLaunch | null,
 ): Promise<PonsLaunchRecord> {
   const token = launch.token as Address;
 
   try {
-    const [metadata, resolved] = await Promise.all([
-      readTokenOnchainMetadata(token),
-      resolveLaunchedToken(token),
-    ]);
+    const resolved =
+      preResolved !== undefined
+        ? preResolved
+        : await resolveLaunchedToken(token).catch(() => null);
+
+    const isV2 = resolved?.kind === 'v2';
+    // v2 cards only need the curve from the factory row — skip the heavy
+    // token metadata multicall (name/logo/socials/pool) that Explore already
+    // has from the registry.
+    const metadata = isV2
+      ? EMPTY_METADATA
+      : await readTokenOnchainMetadata(token);
 
     const isToken0 = resolved?.launched.isToken0 ?? isToken0Ordering(token);
     // v2 factory does not return supply — treat 0 as unset.
@@ -242,7 +280,6 @@ export async function enrichLaunchRecord(
         : BigInt(PONS_TOTAL_SUPPLY);
     const factory = resolved?.factory;
 
-    const isV2 = resolved?.kind === 'v2';
     const v2Curve =
       isV2 && resolved?.launched.curve ? resolved.launched.curve : null;
 
@@ -273,7 +310,7 @@ export async function enrichLaunchRecord(
               supplyWei,
             }).catch(() => emptyMarket)
           : Promise.resolve(emptyMarket),
-      readVaultStat(launch.vault),
+      readVaultStat(launch.vault, launch.vaultTemplate),
     ]);
 
     const market = marketOrCurve;
@@ -352,8 +389,7 @@ export async function enrichLaunchRecords(
     > & { everGraduated?: boolean }
   >,
 ): Promise<PonsLaunchRecord[]> {
-  // Resolve each launch's factory row once so we can warm equity USD prices
-  // (one Chainlink read per quote symbol) before fanning out card enrichment.
+  // Resolve each launch's factory row once — reuse for pricing + enrichment.
   const resolved = await Promise.all(
     launches.map((launch) =>
       resolveLaunchedToken(launch.token as Address).catch(() => null),
@@ -365,5 +401,7 @@ export async function enrichLaunchRecords(
       .map((row) => row!.launched.pairedToken),
   );
 
-  return Promise.all(launches.map((launch) => enrichLaunchRecord(launch)));
+  return Promise.all(
+    launches.map((launch, index) => enrichLaunchRecord(launch, resolved[index])),
+  );
 }
