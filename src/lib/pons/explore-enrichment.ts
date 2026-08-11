@@ -18,7 +18,10 @@ import { isToken0Ordering } from './trades';
 import type { PonsLaunchRecord, VaultStat } from './types';
 import { PONS_LOTTERY_VAULT_ABI } from '@/lib/lottery/abi';
 import { findV2PairToken } from './v2-deployments';
-import { readV2CurveMarketSnapshot } from './v2-pricing';
+import {
+  isV2CurveMarketSnapshot,
+  readV2CurveMarketSnapshot,
+} from './v2-pricing';
 
 import { PONS_STAKING_VAULT_ABI, PONS_VAULT_ABI } from './vault-state';
 
@@ -314,27 +317,28 @@ export async function enrichLaunchRecord(
     ]);
 
     const market = marketOrCurve;
-    const rawGraduation =
-      v2Curve && 'progress' in marketOrCurve
-        ? {
+    const v2Market =
+      v2Curve && isV2CurveMarketSnapshot(marketOrCurve) ? marketOrCurve : null;
+    const rawGraduation = v2Market
+      ? {
+          pairedPrincipal: 0n,
+          threshold: 0n,
+          graduated: Boolean(v2Market.graduated),
+          progress: v2Market.progress,
+        }
+      : !isV2 && factory
+        ? await readGraduationStatus(token, factory).catch(() => ({
             pairedPrincipal: 0n,
             threshold: 0n,
-            graduated: Boolean(marketOrCurve.graduated),
-            progress: marketOrCurve.progress,
-          }
-        : !isV2 && factory
-          ? await readGraduationStatus(token, factory).catch(() => ({
-              pairedPrincipal: 0n,
-              threshold: 0n,
-              graduated: false,
-              progress: 0,
-            }))
-          : {
-              pairedPrincipal: 0n,
-              threshold: 0n,
-              graduated: false,
-              progress: 0,
-            };
+            graduated: false,
+            progress: 0,
+          }))
+        : {
+            pairedPrincipal: 0n,
+            threshold: 0n,
+            graduated: false,
+            progress: 0,
+          };
 
     const graduation = !isV2
       ? await resolveStickyGraduation({

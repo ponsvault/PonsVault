@@ -13,7 +13,10 @@ import {
   readTokenOnchainMetadata,
 } from './token-state';
 import type { TokenDetailResponse } from './types';
-import { readV2CurveMarketSnapshot } from './v2-pricing';
+import {
+  isV2CurveMarketSnapshot,
+  readV2CurveMarketSnapshot,
+} from './v2-pricing';
 
 export async function fetchTokenDetail(token: Address): Promise<TokenDetailResponse> {
   const [metadata, resolved] = await Promise.all([
@@ -71,22 +74,23 @@ export async function fetchTokenDetail(token: Address): Promise<TokenDetailRespo
   ]);
 
   const market = marketOrCurve;
-  const rawGraduation =
-    v2Curve && 'progress' in marketOrCurve
-      ? {
+  const v2Market =
+    v2Curve && isV2CurveMarketSnapshot(marketOrCurve) ? marketOrCurve : null;
+  const rawGraduation = v2Market
+    ? {
+        pairedPrincipal: 0n,
+        threshold: 0n,
+        graduated: Boolean(v2Market.graduated),
+        progress: v2Market.progress,
+      }
+    : !isV2 && factory
+      ? await readGraduationStatus(token, factory)
+      : {
           pairedPrincipal: 0n,
           threshold: 0n,
-          graduated: Boolean(marketOrCurve.graduated),
-          progress: marketOrCurve.progress,
-        }
-      : !isV2 && factory
-        ? await readGraduationStatus(token, factory)
-        : {
-            pairedPrincipal: 0n,
-            threshold: 0n,
-            graduated: false,
-            progress: 0,
-          };
+          graduated: false,
+          progress: 0,
+        };
 
   const graduation = !isV2
     ? await resolveStickyGraduation({

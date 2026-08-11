@@ -48,6 +48,16 @@ export interface V2CurveMarketSnapshot extends PoolMarketSnapshot {
   priceInQuote: number;
 }
 
+export function isV2CurveMarketSnapshot(
+  market: object,
+): market is V2CurveMarketSnapshot {
+  return (
+    'progress' in market &&
+    'graduated' in market &&
+    'priceInQuote' in market
+  );
+}
+
 /**
  * Spot price + graduation progress for a pre-pool v2 bonding curve.
  *
