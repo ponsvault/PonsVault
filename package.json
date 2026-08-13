@@ -7,7 +7,15 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "keeper": "node --env-file-if-exists=.env.local scripts/keeper-tick.mjs"
+    "keeper": "node --env-file-if-exists=.env.local scripts/keeper-tick.mjs",
+    "originals:build": "node scripts/build-originals.mjs",
+    "originals:check": "tsx scripts/check-originals.mjs",
+    "originals:pin": "node --env-file-if-exists=.env.local scripts/pin-originals.mjs",
+    "seats:check-batch": "tsx scripts/check-fuel-batch.ts",
+    "seats:launch-test": "tsx scripts/launch-test-series.ts",
+    "seats:check-lifecycle": "tsx scripts/check-seat-lifecycle.ts",
+    "seats:check-custom-art": "tsx scripts/check-custom-art.ts",
+    "seats:check-sealed": "tsx scripts/check-sealed-series.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.7",
@@ -30,7 +38,9 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "sharp": "^0.34.5",
     "tailwindcss": "^4",
+    "tsx": "^4.23.12",
     "typescript": "^5"
   }
 }

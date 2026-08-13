@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter, Geist_Mono } from 'next/font/google';
 
+import { HashScroll } from '@/components/hash-scroll';
 import { SiteHeader } from '@/components/site-header';
 import { Providers } from '@/components/providers';
 
@@ -43,6 +44,7 @@ export default function RootLayout({
     >
       <body className="min-h-full font-sans">
         <Providers>
+          <HashScroll />
           <SiteHeader />
           {children}
         </Providers>

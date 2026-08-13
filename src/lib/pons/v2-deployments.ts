@@ -33,9 +33,16 @@ export const PONS_V2 = {
  * Quote assets the create flow may offer.
  *
  * Only tokens that pass `approvedPairTokens` + non-zero economics on the live
- * factory belong here. Native ETH / WETH are intentionally absent — both are
- * still closed on-chain. When pons adds a new approved equity, add it here and
+ * factory belong here. When pons adds a new approved equity, add it here and
  * it also becomes a same-asset RWA dividend option via `CURATED_RWA_ASSETS`.
+ *
+ * Native ETH is absent for a reason that is easy to misread. The factory does
+ * accept it — pass the zero address and `launchToken` succeeds — but it is the
+ * factory's own native path, so `approvedPairTokens(0x0)` reads `false` even
+ * though ETH launches work. What cannot take a native quote is our own vault
+ * templates: `PonsV2VaultBase` reverts `NativeQuoteUnsupported`. This list
+ * feeds vault launches, hence no ETH. Seat fuel attaches no vault and does
+ * offer it — see `FUEL_PAIR_OPTIONS` in `src/lib/seats/fuel-launch.ts`.
  */
 export const PONS_V2_PAIR_TOKENS = [
   {

@@ -15,6 +15,8 @@ import type { LotteryVaultState } from '@/lib/pons/vault-state';
 interface TokenLotteryPanelProps {
   symbol: string;
   state: LotteryVaultState;
+  /** Ticking clock from the parent. 0 until the client mounts. */
+  nowSeconds: number;
   onChanged: () => void;
 }
 
@@ -38,7 +40,12 @@ function phaseLabel(phase: number): string {
  *
  * Commit/reveal stay with the keeper — holders only need Enter.
  */
-export function TokenLotteryPanel({ symbol, state, onChanged }: TokenLotteryPanelProps) {
+export function TokenLotteryPanel({
+  symbol,
+  state,
+  nowSeconds,
+  onChanged,
+}: TokenLotteryPanelProps) {
   const { address, isConnected, chainId } = useAccount();
   const config = useConfig();
   const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
@@ -85,7 +92,10 @@ export function TokenLotteryPanel({ symbol, state, onChanged }: TokenLotteryPane
     },
   });
 
-  const entryOpen = state.phase === LOTTERY_PHASE.Entering && Date.now() / 1000 < state.entryEndsAt;
+  // Reading the clock during render would freeze this at mount time, leaving Enter live after the
+  // window shut and sending holders into a revert. Stay closed until the parent's clock starts.
+  const entryOpen =
+    state.phase === LOTTERY_PHASE.Entering && nowSeconds > 0 && nowSeconds < state.entryEndsAt;
   const busy = enterMutation.isPending;
 
   return (

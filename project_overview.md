@@ -2,7 +2,8 @@
 
 How the pieces fit together, why they are shaped that way, and what is still
 missing. `README.md` covers setup and `ABOUT.md` is the product pitch; this is
-the engineering map.
+the engineering map. Vault Seats — the NFT series desk — is a separate world
+with its own contracts and economy, mapped in `docs/vault-seats.md`.
 
 ---
 

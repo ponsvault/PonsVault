@@ -10,9 +10,16 @@ export function shortAddress(address: string, chars = 4): string {
   return `${address.slice(0, 2 + chars)}…${address.slice(-chars)}`;
 }
 
+// Public gateways can only serve a CID once it has propagated across the network, which takes hours.
+// Pinata serves anything we pinned straight away, so point at it to keep art from rendering blank in
+// the minutes after a series is created.
+const IPFS_GATEWAY = (
+  process.env.NEXT_PUBLIC_IPFS_GATEWAY ?? 'https://gateway.pinata.cloud'
+).replace(/\/+$/, '');
+
 export function ipfsToGateway(uri: string): string {
   if (!uri.startsWith('ipfs://')) return uri;
-  return `https://ipfs.io/ipfs/${uri.slice(7)}`;
+  return `${IPFS_GATEWAY}/ipfs/${uri.slice(7)}`;
 }
 
 export function formatUsd(value: number | null | undefined, digits = 2): string {

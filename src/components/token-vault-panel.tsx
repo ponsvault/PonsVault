@@ -141,7 +141,14 @@ export function TokenVaultPanel({
   }
 
   if (state.template === 'lottery') {
-    return <TokenLotteryPanel symbol={symbol} state={state} onChanged={() => refetch()} />;
+    return (
+      <TokenLotteryPanel
+        symbol={symbol}
+        state={state}
+        nowSeconds={nowSeconds}
+        onChanged={() => refetch()}
+      />
+    );
   }
 
   return (

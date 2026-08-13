@@ -2,6 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
+import {ROBINHOOD_FORK_BLOCK} from "./fixtures/ForkBlock.sol";
 import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 
 import {PonsAddresses} from "../src/PonsAddresses.sol";
@@ -48,7 +49,7 @@ contract PonsRwaVaultForkTest is Test {
     uint256 saltNonce;
 
     function setUp() public {
-        vm.createSelectFork("robinhood");
+        vm.createSelectFork("robinhood", ROBINHOOD_FORK_BLOCK);
 
         registry = new PonsVaultRegistry();
         rwaFactory = new PonsRwaVaultFactory(distributor);

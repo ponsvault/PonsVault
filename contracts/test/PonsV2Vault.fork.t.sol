@@ -2,6 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
+import {ROBINHOOD_FORK_BLOCK} from "./fixtures/ForkBlock.sol";
 import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 
 import {PonsTemplates} from "../src/PonsTemplates.sol";
@@ -39,7 +40,7 @@ contract PonsV2VaultForkTest is Test {
     uint256 launchFee;
 
     function setUp() public {
-        vm.createSelectFork("robinhood");
+        vm.createSelectFork("robinhood", ROBINHOOD_FORK_BLOCK);
 
         assertTrue(FACTORY.launchEnabled(), "pons v2 launches must be open");
         assertTrue(FACTORY.approvedPairTokens(address(AAPL)), "AAPL must be approved");

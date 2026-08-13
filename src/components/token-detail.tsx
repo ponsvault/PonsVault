@@ -10,6 +10,7 @@ import { TokenCreatorFeesPanel } from '@/components/token-creator-fees-panel';
 import { TokenPriceChart } from '@/components/token-price-chart';
 import { TokenVaultPanel } from '@/components/token-vault-panel';
 import { fetchTokenDetail } from '@/lib/pons/api';
+import { isSeatLauncher } from '@/lib/seats/deployments';
 import { txUrl } from '@/lib/pons/launch';
 import {
   cn,
@@ -68,6 +69,13 @@ export function TokenDetail({ token }: TokenDetailProps) {
       </div>
     );
   }
+
+  // A seat series launches its fuel through the seat launcher, so pons records that contract as the
+  // deployer. The person behind the token is the creator fee recipient it was launched for.
+  const launchedViaSeats = isSeatLauncher(data.launch?.deployer);
+  const creditedDeployer = launchedViaSeats
+    ? data.fees.creatorPayout
+    : (data.launch?.deployer ?? '');
 
   const socialLinks = [
     { key: 'website', label: 'Website', href: socialUrl('website', data.metadata.socials.website) },
@@ -259,11 +267,17 @@ export function TokenDetail({ token }: TokenDetailProps) {
               {data.launch ? (
                 <>
                   <div>
-                    <dt>Deployer</dt>
+                    <dt>{launchedViaSeats ? 'Creator' : 'Deployer'}</dt>
                     <dd>
-                      <a href={explorerAddressUrl(data.launch.deployer)} target="_blank" rel="noreferrer">
-                        {shortAddress(data.launch.deployer, 6)}
+                      <a href={explorerAddressUrl(creditedDeployer)} target="_blank" rel="noreferrer">
+                        {shortAddress(creditedDeployer, 6)}
                       </a>
+                      {launchedViaSeats ? (
+                        <span className="text-[var(--text-muted)]">
+                          {' '}
+                          · launched with a Vault Seats series
+                        </span>
+                      ) : null}
                     </dd>
                   </div>
                   <div>

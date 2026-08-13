@@ -23,6 +23,7 @@ import {
 import { computeMaxDevBuyWei, formatMaxDevBuyEth } from './max-dev-buy';
 import type { LaunchFormInput, PonsLaunchMetadata, PonsLaunchpadStatus } from './types';
 import { findV2PairToken } from './v2-deployments';
+
 import { validateV2VaultInput } from './v2-vault';
 import { validateVaultInput } from './vault';
 

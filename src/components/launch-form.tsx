@@ -246,10 +246,9 @@ export function LaunchForm() {
 
   const validationError = useMemo(() => validateLaunchInput(form, undefined), [form]);
 
-  const vaultConfigError = useMemo(
-    () => validateV2VaultInput(form, { buybackHelperReady: status?.buybackHelperReady }),
-    [form, status?.buybackHelperReady],
-  );
+  const vaultConfigError = useMemo(() => {
+    return validateV2VaultInput(form, { buybackHelperReady: status?.buybackHelperReady });
+  }, [form, status?.buybackHelperReady]);
 
   const burnSharePercent = Number(form.vaultBurnPercent);
   const treasuryInvalid =
@@ -329,7 +328,12 @@ export function LaunchForm() {
       return { label: 'Confirm public upload first', disabled: true, mode: 'launch' as const, blocked: true };
     }
     if (!hasValidImage) {
-      return { label: 'Add token image', disabled: true, mode: 'launch' as const, blocked: true };
+      return {
+        label: 'Add token image',
+        disabled: true,
+        mode: 'launch' as const,
+        blocked: true,
+      };
     }
     if (!hasValidDetails) {
       return { label: 'Fill token details', disabled: true, mode: 'launch' as const, blocked: true };
@@ -398,7 +402,12 @@ export function LaunchForm() {
   async function handleLaunch() {
     setError('');
 
-    if (!isConnected || !address || !walletClient || !status) {
+    if (!isConnected || !address || !walletClient) {
+      setError('Connect your wallet first.');
+      return;
+    }
+
+    if (!status) {
       setError('Connect your wallet first.');
       return;
     }
@@ -758,32 +767,36 @@ export function LaunchForm() {
           </label>
 
           <label className="launchpad-field launchpad-field-wide">
-            <span className="launchpad-label">Pairing asset</span>
-            <select
-              className="launchpad-input"
-              aria-label="Pairing asset"
-              value={selectedPair.address}
-              onChange={(e) => selectPairToken(e.target.value)}
-            >
-              {approvedPairs.map((pair) => (
-                <option key={pair.address} value={pair.address}>
-                  {pair.symbol} — {pair.name}
-                </option>
-              ))}
-            </select>
-            <p className="launchpad-field-note">
-              Buyers spend this on the curve, and creator fees arrive in it. Pair with the same
-              stock as an RWA dividend to pay that stock out with no Uniswap buy. Native ETH is
-              not open yet.
-            </p>
+              <span className="launchpad-label">Pairing asset</span>
+              <select
+                className="launchpad-input"
+                aria-label="Pairing asset"
+                value={selectedPair.address}
+                onChange={(e) => selectPairToken(e.target.value)}
+              >
+                {approvedPairs.map((pair) => (
+                  <option key={pair.address} value={pair.address}>
+                    {pair.symbol} — {pair.name}
+                  </option>
+                ))}
+              </select>
+              <p className="launchpad-field-note">
+                Buyers spend this on the curve, and creator fees arrive in it. Pair with the same
+                stock as an RWA dividend to pay that stock out with no Uniswap buy. Vaults need an
+                ERC-20 here, so ETH-paired launches are on the Seats desk rather than this one.
+              </p>
           </label>
 
           <div className="launchpad-field launchpad-field-wide">
             <span className="launchpad-label">Vault</span>
             <p className="launchpad-field-note">
-              Decides what happens to this token&apos;s creator fees. Fixed at launch —{' '}
+              Decides what happens to this token&rsquo;s creator fees. Fixed at launch —{' '}
               <Link href="/docs#vaults" className="link">
                 read how vaults work
+              </Link>
+              . After an NFT series instead, where the token is the fuel for the seats? That is the{' '}
+              <Link href="/seats/create" className="link">
+                seats desk
               </Link>
               .
             </p>
@@ -1126,57 +1139,59 @@ export function LaunchForm() {
         )}
 
         <dl className="launchpad-preview-details">
-          <div>
-            <dt>Launch fee</dt>
-            <dd>
-              <span className="launchpad-preview-eth">
-                {status?.launchFeeEth ?? '—'}
-                <img src="/ethereum.svg" alt="" width={14} height={14} className="token-icon" />
-              </span>
-            </dd>
-          </div>
-          <div>
-            <dt>Paired in</dt>
-            <dd>{selectedPair.symbol}</dd>
-          </div>
-          <div>
-            <dt>Vault</dt>
-            <dd>{selectedVault?.name ?? 'No vault'}</dd>
-          </div>
-          {form.vaultTemplate === 'buyback-burn' ? (
-            <div>
-              <dt>Creator fees</dt>
-              <dd>
-                {Number.isFinite(burnSharePercent)
-                  ? `${burnSharePercent}% burned / ${100 - burnSharePercent}% treasury`
-                  : '—'}
-              </dd>
-            </div>
-          ) : null}
-          {form.vaultTemplate === 'staking' ? (
-            <div>
-              <dt>Creator fees</dt>
-              <dd>Paid to stakers in {selectedPair.symbol}</dd>
-            </div>
-          ) : null}
-          {form.vaultTemplate === 'rwa' ? (
-            <div>
-              <dt>Creator fees</dt>
-              <dd>
-                {selectedRwaAsset
-                  ? `Buy ${selectedRwaAsset.symbol} for holders`
-                  : 'Buy a stock for holders'}
-              </dd>
-            </div>
-          ) : null}
-          <div>
-            <dt>Graduation</dt>
-            <dd>{graduationLabel}</dd>
-          </div>
-          <div>
-            <dt>Liquidity</dt>
-            <dd>Locked Uniswap v4</dd>
-          </div>
+          <>
+              <div>
+                <dt>Launch fee</dt>
+                <dd>
+                  <span className="launchpad-preview-eth">
+                    {status?.launchFeeEth ?? '—'}
+                    <img src="/ethereum.svg" alt="" width={14} height={14} className="token-icon" />
+                  </span>
+                </dd>
+              </div>
+              <div>
+                <dt>Paired in</dt>
+                <dd>{selectedPair.symbol}</dd>
+              </div>
+              <div>
+                <dt>Vault</dt>
+                <dd>{selectedVault?.name ?? 'No vault'}</dd>
+              </div>
+              {form.vaultTemplate === 'buyback-burn' ? (
+                <div>
+                  <dt>Creator fees</dt>
+                  <dd>
+                    {Number.isFinite(burnSharePercent)
+                      ? `${burnSharePercent}% burned / ${100 - burnSharePercent}% treasury`
+                      : '—'}
+                  </dd>
+                </div>
+              ) : null}
+              {form.vaultTemplate === 'staking' ? (
+                <div>
+                  <dt>Creator fees</dt>
+                  <dd>Paid to stakers in {selectedPair.symbol}</dd>
+                </div>
+              ) : null}
+              {form.vaultTemplate === 'rwa' ? (
+                <div>
+                  <dt>Creator fees</dt>
+                  <dd>
+                    {selectedRwaAsset
+                      ? `Buy ${selectedRwaAsset.symbol} for holders`
+                      : 'Buy a stock for holders'}
+                  </dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Graduation</dt>
+                <dd>{graduationLabel}</dd>
+              </div>
+              <div>
+                <dt>Liquidity</dt>
+                <dd>Locked Uniswap v4</dd>
+              </div>
+            </>
         </dl>
       </aside>
     </div>

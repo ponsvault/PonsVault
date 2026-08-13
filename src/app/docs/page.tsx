@@ -23,6 +23,7 @@ const TOC = [
   { href: '#vaults', label: 'How a vault earns' },
   { href: '#authority', label: 'Who can trigger it' },
   { href: '#templates', label: 'Templates' },
+  { href: '#vault-seats', label: 'Vault Seats' },
   { href: '#parameters', label: 'Parameters' },
   { href: '#security', label: 'Security model' },
   { href: '#limits', label: 'Limits & caveats' },
@@ -109,8 +110,7 @@ export default function DocsPage() {
 
         <div className="pv-docs-main">
           <Reveal as="section" className="pv-docs-section">
-            <div id="overview" />
-            <h2>What problem this solves</h2>
+            <h2 id="overview">What problem this solves</h2>
             <p>
               When a pons token launches, the trading fees earned by its liquidity position accrue to
               a creator. That is good for the creator and neutral at best for everyone else: the value
@@ -136,8 +136,7 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
-            <div id="contracts" />
-            <h2>Contracts</h2>
+            <h2 id="contracts">Contracts</h2>
             <p>
               Everything PonsVault V2 does happens in these contracts, on Robinhood Chain (4663).
               They are deployed once and reused by every launch — the only thing created per token
@@ -162,8 +161,7 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
-            <div id="vaults" />
-            <h2>How a vault earns</h2>
+            <h2 id="vaults">How a vault earns</h2>
             <p>
               Every pons launch has its liquidity position held by a <strong>locker</strong> contract.
               The locker tracks a per-token <code>feeRedirect</code> address and pays the creator
@@ -198,8 +196,7 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
-            <div id="authority" />
-            <h2>Who can trigger it</h2>
+            <h2 id="authority">Who can trigger it</h2>
             <p>
               This is the part worth understanding, because it explains why PonsVault performs your
               launch for you rather than bolting a vault onto it afterwards.
@@ -238,8 +235,7 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
-            <div id="templates" />
-            <h2>Templates</h2>
+            <h2 id="templates">Templates</h2>
             <p>
               A template is a vault contract with one job. You choose one at launch and configure it;
               the configuration is then fixed for the life of the vault.
@@ -272,15 +268,6 @@ export default function DocsPage() {
               or no lock. Like every other parameter, it cannot be changed afterwards.
             </p>
 
-            <h3>Lottery</h3>
-            <p>
-              Fees fill a prize pot. When the floor is hit, a round opens and holders Enter while
-              they still hold the token. After the entry window, the operator commits to a secret,
-              waits the reveal delay, then reveals — one entrant wins the whole pot in WETH. The
-              delay is what stops the operator picking a seed after seeing who entered. There is no
-              VRF on this chain; commit–reveal is the fair substitute. Token-side fees are burned.
-            </p>
-
             <h3>RWA Dividend</h3>
             <p>
               Converts creator fees (in the pairing asset) into a tokenized stock via Uniswap V3,
@@ -305,8 +292,205 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
-            <div id="parameters" />
-            <h2>Parameters</h2>
+            <h2 id="vault-seats">Vault Seats</h2>
+            <p>
+              Separate from bonding-curve launches on{' '}
+              <Link href="/launch" className="link">
+                Launch
+              </Link>
+              . Each <strong>series</strong> is an NFT collection plus its own fuel $TOKEN, with a
+              shop, activation, fee pot, and loans. Product UI:{' '}
+              <Link href="/seats" className="link">
+                /seats
+              </Link>
+              .
+            </p>
+            <p>
+              <strong>Seat = NFT.</strong> <strong>Fuel = that series’ $TOKEN</strong> (ERC-20).
+              Loop: Get $TOKEN · Trade · Activate · Distribute.
+            </p>
+
+            <h3>What a series is made of</h3>
+            <ul>
+              <li>
+                <strong>Seat NFT</strong> — numbered collectible; uploaded art is the NFT image.
+              </li>
+              <li>
+                <strong>Seat wallet</strong> — built-in wallet per NFT; rewards land here and move
+                with the NFT on sale. Its address is fixed from the moment the series exists and can
+                receive rewards straight away; the wallet contract itself is deployed the first time
+                the owner spends from it.
+              </li>
+              <li>
+                <strong>Fuel $TOKEN</strong> — ERC-20 for buying seats and paying activation, never
+                ETH. Every series launches its own on a pons v2 bonding curve in the same
+                transaction that creates the series, so anyone can buy fuel with ETH (or an approved
+                ERC-20 such as USDG) and the series has a real market from the first block. An
+                ETH-paired curve takes the quote as transaction value, so buying fuel needs no
+                approval first. A creator can buy the first fuel in that same transaction, which is the
+                only way to hold any before the series is live.
+              </li>
+              <li>
+                <strong>Shop (AMM)</strong> — fixed $TOKEN price per seat, and the only contract that
+                can mint one. Buy next, snipe a #, or sell back; seats sold back are resold before
+                any new one is minted. Every trade also carries ETH, and all of it goes to the reward
+                pot with no protocol cut: 10% of what a seat is worth to buy or sell, 15% to snipe.
+                The contract cannot know what a seat is worth, so it enforces those percentages
+                against a 0.01 ETH seat as a floor and the desk prices the real thing off the fuel
+                curve.
+              </li>
+            </ul>
+
+            <h3>How to get a seat</h3>
+            <ol>
+              <li>
+                Hold the series fuel $TOKEN. Buy it on the series&apos; own curve, straight from the
+                desk — with ETH, or with the ERC-20 the curve is paired against.
+              </li>
+              <li>
+                On the series desk: <strong>Buy next</strong> for the next NFT in line, or type a
+                number and <strong>Snipe</strong> that exact # if nobody owns it yet (same $TOKEN
+                price, higher ETH fee).
+              </li>
+              <li>
+                Seats are minted as they sell, not up front, so you pay the gas for your own NFT
+                (roughly 175k gas) and the creator never pays for seats nobody bought. It also means
+                any series size launches for the same cost.
+              </li>
+              <li>
+                <strong>Activate</strong> with $TOKEN (tiered) to join the payroll. Transfer clears
+                activation.
+              </li>
+              <li>
+                When the ETH pot bar is full, anyone can <strong>Distribute</strong> (pay gas).
+                Activated seats share by tier; use <strong>Deliver</strong> to claim a seat’s share
+                into its wallet.
+              </li>
+            </ol>
+
+            <h3>Desk features</h3>
+            <ul>
+              <li>
+                <strong>Buy / Snipe / Sell</strong> — trade seat NFTs against $TOKEN + ETH fee.
+              </li>
+              <li>
+                <strong>Activate</strong> — stake a seat on the distribution payroll (tier weighted).
+              </li>
+              <li>
+                <strong>Distribute / Deliver</strong> — open a payout when the pot is full; push
+                rewards to seat wallets.
+              </li>
+              <li>
+                <strong>Borrow / Repay</strong> — lock a seat NFT, borrow $TOKEN principal against
+                it; repay or face liquidation after due. Borrowing carries the same ETH fee as
+                buying a seat, split between the reward pot and the protocol.
+              </li>
+            </ul>
+
+            <h3>Who gets paid, and when</h3>
+            <p>
+              A payout round freezes its share table the moment it opens. Only seats already
+              activated at that point can claim it, so activating after a round opens does not
+              dilute anyone who was there first — you are simply in line for the next one. Changing
+              your tier re-dates your seat for the same reason, so upgrade between rounds rather
+              than during one. A round can never pay out more than the pot it was opened with, and
+              whatever nobody claims within seven days rolls into the next pot instead of sitting
+              stranded in the contract.
+            </p>
+
+            <h3>Borrowing against a seat</h3>
+            <p>
+              A loan pays out <strong>70% of the seat&apos;s shop price</strong> in $TOKEN and locks
+              the NFT in the loan vault for the term. Repay the principal and the seat comes back.
+              Miss the deadline and anyone can liquidate it — but a liquidator has to pay the
+              principal into the vault to take the seat, so they are buying a seat worth full price
+              for 70% of it. That discount is the incentive to liquidate, and it is why defaulting
+              costs you the seat rather than paying you.
+            </p>
+
+            <h3>PonsVault Originals</h3>
+            <p>
+              The house art pack, for creators who do not want to make their own art. Twelve animals
+              rendered in eight light grades: <em>Golden Hour</em>, <em>Sunrise</em>,{' '}
+              <em>Overcast</em> and <em>Dusk</em> stay photographic, while <em>Moonlit</em>,{' '}
+              <em>Ash</em>, <em>Aurora</em> and <em>Prism</em> get progressively rarer and more
+              stylised. An Originals run is a fixed <strong>1111 seats</strong> — the rarity table
+              allocates exact counts for that number, so it is not configurable.
+            </p>
+            <p>
+              Rarity is dealt by exact allocation, not per-seat dice rolls: 333 Golden Hour, 222
+              Sunrise, 178 Overcast, 155 Dusk, 111 Moonlit, 56 Ash, 44 Aurora, 11 Prism, and a
+              single <strong>1 of 1</strong>, shuffled with a random per-series salt. Every series
+              deals a different hand from the same deck. The artwork is pinned once and shared by
+              every Originals series, so launching on it needs no upload and no wait; only the
+              per-series metadata folder is written at launch.
+            </p>
+            <p>
+              The 1 of 1 sits outside the animal × light grid and is never colour graded, so it has
+              no near-misses: exactly one seat in the run holds it. It is also the image the series
+              itself leads with.
+            </p>
+
+            <h3>Sealed until the sale ends</h3>
+            <p>
+              An Originals series sells <strong>sealed</strong>. Every seat returns the same
+              placeholder card from <code>tokenURI</code> while the sale runs, so no buyer — and not
+              the creator either — can tell which number holds the 1 of 1. Without that, a
+              pre-revealed pack is public before the first sale and <code>snipe</code> lets anyone
+              take the rarest seat on purpose for the price of a 15% fee.
+            </p>
+            <p>
+              The pack is fixed before anything is sold: the collection stores{' '}
+              <code>keccak256</code> of the real base URI at creation, and <code>reveal</code> only
+              accepts a URI that hashes to it. So the reveal cannot swap the hand for a different
+              one, and it does not matter who sends the transaction. It unlocks when the series
+              sells out, or seven days after creation, whichever comes first — a series that never
+              sells out still gets its art. Marketplaces are told to re-read metadata through an
+              ERC-4906 <code>BatchMetadataUpdate</code>.
+            </p>
+            <p>
+              A series using your own single image has nothing to hide, so it commits nothing and is
+              revealed from the first sale.
+            </p>
+
+            <h3>For developers</h3>
+            <p>
+              Create from{' '}
+              <Link href="/seats/create" className="link">
+                /seats/create
+              </Link>
+              : name, ticker, art (Originals or your own image), supply, $TOKEN seat price, and where
+              fuel comes from. <code>createSeries</code> deploys the NFT collection, shop,
+              activation, booster pot, and loan vault in one call.
+            </p>
+            <p>
+              A series has to point at fuel that already exists, so creating one is naturally two
+              calls. Wallet batching can sign two calls as one confirmation, but only on chains the
+              wallet has enabled it for, which is why <code>PonsSeatLauncher</code> does both inside
+              a single contract call instead: it launches the fuel, buys the creator&apos;s first
+              fuel on the curve it just made, and calls <code>createSeries</code> with the real
+              address. One confirmation on every wallet, all of it or none of it, and no
+              half-finished launch to recover from. Only an ERC-20 pair adds a second prompt, for
+              the approval.
+            </p>
+            <p>
+              Nothing that carries rights is attributed to the launcher: the fuel token&apos;s
+              creator fees point at the caller, the first buy is delivered to them, and the series is
+              registered in their name through <code>createSeriesFor</code>, which the factory
+              accepts from that one address. pons&apos; own <code>deployer</code> field is the
+              exception — it is whoever called <code>launchToken</code>, and only pons&apos;
+              configured forwarder may name someone else. It carries no rights: the factory records
+              it and never checks it, while fees and every creator action are gated on the creator
+              fee recipient, which is the creator.{' '}
+              <code>npm run seats:check-batch</code> runs it on a fork and asserts each of those.
+              Addresses live in <code>src/lib/seats/deployments.ts</code>, updated after{' '}
+              <code>DeployPonsSeats</code>. Set <code>PONS_ORIGINALS_ART_CID</code> after{' '}
+              <code>npm run originals:pin</code> so Originals launches skip the art upload.
+            </p>
+          </Reveal>
+
+          <Reveal as="section" className="pv-docs-section">
+            <h2 id="parameters">Parameters</h2>
             <p>
               Every template exposes its own settings, named here as they appear in the launch form.
               They are written once, when the vault is created. None of them has a setter, so none
@@ -383,8 +567,7 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
-            <div id="security" />
-            <h2>Security model</h2>
+            <h2 id="security">Security model</h2>
             <p>
               Making the trigger public is what makes a vault credible, and it is also what makes it
               attackable. Any template that trades on demand is an invitation to move the pool first
@@ -430,8 +613,7 @@ export default function DocsPage() {
           </Reveal>
 
           <Reveal as="section" className="pv-docs-section">
-            <div id="limits" />
-            <h2>Limits &amp; caveats</h2>
+            <h2 id="limits">Limits &amp; caveats</h2>
             <p>
               Things worth knowing before you launch, including a few sharp edges we found while
               testing against the live chain.
@@ -456,8 +638,8 @@ export default function DocsPage() {
               </li>
               <li>
                 <strong>A vault is not a price guarantee.</strong> Burning supply does not create
-                demand, and neither does a prize pool. Whichever template you pick, it is funded by
-                trading — if nothing trades, no fees accrue and the vault does nothing.
+                demand. Whichever template you pick, it is funded by trading — if nothing trades, no
+                fees accrue and the vault does nothing.
               </li>
               <li>
                 <strong>Audit status.</strong> The vault contracts are tested against live chain state

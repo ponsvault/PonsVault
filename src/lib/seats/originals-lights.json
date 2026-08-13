@@ -1,0 +1,49 @@
+[
+  {
+    "id": "golden",
+    "name": "Golden Hour",
+    "weight": 30
+  },
+  {
+    "id": "sunrise",
+    "name": "Sunrise",
+    "weight": 20,
+    "modulate": { "hue": -6, "saturation": 1.12, "brightness": 1.07 }
+  },
+  {
+    "id": "overcast",
+    "name": "Overcast",
+    "weight": 16,
+    "modulate": { "saturation": 0.72, "brightness": 0.96 }
+  },
+  {
+    "id": "dusk",
+    "name": "Dusk",
+    "weight": 14,
+    "modulate": { "hue": 8, "saturation": 1.06, "brightness": 0.78 }
+  },
+  {
+    "id": "moonlit",
+    "name": "Moonlit",
+    "weight": 10,
+    "modulate": { "hue": 165, "saturation": 0.45, "brightness": 0.68 }
+  },
+  {
+    "id": "ash",
+    "name": "Ash",
+    "weight": 5,
+    "grayscale": true
+  },
+  {
+    "id": "aurora",
+    "name": "Aurora",
+    "weight": 4,
+    "modulate": { "hue": 250, "saturation": 1.35, "brightness": 1.02 }
+  },
+  {
+    "id": "prism",
+    "name": "Prism",
+    "weight": 1,
+    "modulate": { "hue": 120, "saturation": 1.8, "brightness": 1.08 }
+  }
+]

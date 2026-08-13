@@ -1,4 +1,4 @@
-import { formatUnits, parseAbi, type Address } from 'viem';
+import { formatUnits, parseAbi, zeroAddress, type Address } from 'viem';
 
 import { robinhoodPublicClient } from './client';
 import { PONS_QUOTER_V2, PONS_WETH } from './contracts';
@@ -131,7 +131,10 @@ export async function readV2CurveMarketSnapshot(params: {
 
 /** USD per 1 whole unit of a v2 pair token. */
 async function quoteTokenUsd(pairToken: Address): Promise<number> {
-  if (pairToken.toLowerCase() === PONS_WETH.toLowerCase()) {
+  // A curve on the factory's native path reports the zero address as its pair, and quotes in ETH
+  // itself. Without this it falls through to the quoter, which has no pool for 0x0 and returns
+  // nothing, leaving every ETH-paired launch priced at zero.
+  if (pairToken === zeroAddress || pairToken.toLowerCase() === PONS_WETH.toLowerCase()) {
     return fetchEthUsd();
   }
 

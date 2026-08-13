@@ -2,7 +2,12 @@ export const PONS_API_BASE = 'https://ponsfamily.com';
 
 export const PONS_CHAIN_ID = 4663;
 
-export const ROBINHOOD_RPC_URL = 'https://rpc.mainnet.chain.robinhood.com';
+/**
+ * Overridable so the app can be pointed at a local fork and driven end to end without spending
+ * anything. Unset — which is every deployed environment — it is mainnet.
+ */
+export const ROBINHOOD_RPC_URL =
+  process.env.NEXT_PUBLIC_ROBINHOOD_RPC_URL || 'https://rpc.mainnet.chain.robinhood.com';
 
 export const PONS_EXPLORER_URL = 'https://robinhoodchain.blockscout.com';
 

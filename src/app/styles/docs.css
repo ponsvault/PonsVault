@@ -151,19 +151,47 @@
   color: var(--text-primary);
 }
 
-.pv-docs-list {
+.pv-docs-list,
+.pv-docs-section ul,
+.pv-docs-section ol {
   margin-top: 18px;
+  padding-left: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.pv-docs-list li {
+.pv-docs-list li,
+.pv-docs-section ul li,
+.pv-docs-section ol li {
   padding-left: 16px;
   border-left: 1px solid var(--hairline);
   font-size: 15px;
   line-height: 26px;
   color: var(--text-muted);
+}
+
+/* Numbered steps get a monospace counter so a sequence reads as an order, not a pile. */
+.pv-docs-section ol {
+  counter-reset: pv-docs-step;
+}
+
+.pv-docs-section ol li {
+  position: relative;
+  counter-increment: pv-docs-step;
+  padding-left: 46px;
+}
+
+.pv-docs-section ol li::before {
+  content: counter(pv-docs-step, decimal-leading-zero);
+  position: absolute;
+  left: 16px;
+  top: 0;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 26px;
+  color: var(--accent);
 }
 
 /* --- code block ---------------------------------------------------------- */

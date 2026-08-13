@@ -49,6 +49,22 @@
   --font-mono: var(--font-geist-mono);
 }
 
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--nav-height) + 24px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Anchor targets clear the sticky nav on every page */
+[id] {
+  scroll-margin-top: calc(var(--nav-height) + 24px);
+}
+
 body {
   background: var(--bg-page);
   color: var(--text-primary);

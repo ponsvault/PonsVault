@@ -144,6 +144,14 @@
     opacity var(--dur) var(--ease);
 }
 
+/* Half the desk's buttons are gated on a wallet, a balance or owning the seat, so a disabled one
+   has to read as disabled rather than as a button that silently does nothing. */
+.pv-btn:disabled,
+.pv-btn[aria-disabled='true'] {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 .pv-btn-primary {
   background: var(--accent);
   color: var(--accent-contrast);

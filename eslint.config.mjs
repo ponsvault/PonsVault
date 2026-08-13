@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Forge installs its dependencies as full checkouts, so contracts/lib is thousands of files of
+    // someone else's JavaScript tooling. Linting it drowns our own findings.
+    "contracts/lib/**",
   ]),
 ]);
 

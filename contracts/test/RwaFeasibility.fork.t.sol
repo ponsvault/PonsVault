@@ -2,6 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {Test, console} from "forge-std/Test.sol";
+import {ROBINHOOD_FORK_BLOCK} from "./fixtures/ForkBlock.sol";
 import {IERC20} from "@openzeppelin/token/ERC20/IERC20.sol";
 
 import {PonsAddresses} from "../src/PonsAddresses.sol";
@@ -27,7 +28,7 @@ contract RwaFeasibilityForkTest is Test {
     address randomUser;
 
     function setUp() public {
-        vm.createSelectFork("robinhood");
+        vm.createSelectFork("robinhood", ROBINHOOD_FORK_BLOCK);
         contractHolder = address(this);
         randomUser = makeAddr("randomUser");
     }

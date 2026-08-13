@@ -6,9 +6,16 @@ evm_version = "cancun"
 solc_version = "0.8.26"
 optimizer = true
 optimizer_runs = 99999
+via_ir = true
+# The seat deployers embed whole contracts as creation code and sit right on the 24 KB limit; the
+# metadata hash is dead weight in every one of those copies.
+bytecode_hash = "none"
+cbor_metadata = false
 
 [rpc_endpoints]
-robinhood = "https://rpc.mainnet.chain.robinhood.com"
+# Set ROBINHOOD_RPC_URL in contracts/.env to use a dedicated endpoint (Alchemy, QuickNode, dRPC).
+# The public endpoint is rate-limited; fork tests pin a block so results are served from cache.
+robinhood = "${ROBINHOOD_RPC_URL}"
 
 [etherscan]
 robinhood = { key = "${BLOCKSCOUT_API_KEY}", url = "https://robinhoodchain.blockscout.com/api", chain = 4663 }

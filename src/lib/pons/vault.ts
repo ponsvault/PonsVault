@@ -28,7 +28,12 @@ import type { LaunchFormInput, PonsLaunchMetadata } from './types';
  * id stays, because it still describes tokens that were launched without one and
  * is the fallback while no launcher is configured.
  */
-export type VaultTemplateId = 'none' | 'buyback-burn' | 'staking' | 'lottery' | 'rwa';
+export type VaultTemplateId =
+  | 'none'
+  | 'buyback-burn'
+  | 'staking'
+  | 'lottery'
+  | 'rwa';
 
 export interface VaultTemplate {
   id: VaultTemplateId;
@@ -49,12 +54,6 @@ export const VAULT_TEMPLATES: VaultTemplate[] = [
     name: 'Staking',
     tagline: 'Fees are paid out to holders who stake, pro rata.',
     status: 'available',
-  },
-  {
-    id: 'lottery',
-    name: 'Lottery',
-    tagline: 'Fees fund a raffle. Holders enter, one wallet wins the pot.',
-    status: 'soon',
   },
   {
     id: 'rwa',
@@ -261,7 +260,9 @@ export const PONSVAULT_LAUNCHER_ABI = [
  * `template()` string, so the same name identifies a template in the URL, the
  * database, the explorer, and the registry.
  */
-export function vaultTemplateId(template: Exclude<VaultTemplateId, 'none'>): Hex {
+export function vaultTemplateId(
+  template: Exclude<VaultTemplateId, 'none'>,
+): Hex {
   return stringToHex(template, { size: 32 });
 }
 
@@ -473,7 +474,7 @@ export function encodeLaunchWithVaultTransaction(
   salt: Hex,
 ) {
   if (input.vaultTemplate === 'none') {
-    throw new Error('Cannot encode a vault launch without a template.');
+    throw new Error('Cannot encode a vault launch without a fee-vault template.');
   }
 
   return encodeFunctionData({
