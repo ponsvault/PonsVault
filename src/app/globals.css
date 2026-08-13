@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  /* Native widgets follow this: without it the browser paints select popups,
+     scrollbars and date pickers light, so a dark select opened onto a white
+     list of muted grey options. */
+  color-scheme: dark;
+
   /* palette — unchanged */
   --accent: #d4fc50;
   --accent-hover: #c8f542;

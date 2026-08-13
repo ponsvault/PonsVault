@@ -66,6 +66,19 @@ select.launchpad-input:disabled {
   cursor: default;
 }
 
+/* The popup is drawn by the OS, so it cannot use the translucent surface the
+   closed control does — that reads as near-white over the list. Options need an
+   opaque colour and their own text colour, since inheriting the muted one left
+   them barely legible. */
+select.launchpad-input option {
+  background: var(--bg-white);
+  color: var(--text-primary);
+}
+
+select.launchpad-input option:disabled {
+  color: var(--text-subtle);
+}
+
 .launchpad-input:hover,
 .launchpad-prefixed-input:hover {
   background: var(--surface-hover);
