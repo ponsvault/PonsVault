@@ -122,7 +122,8 @@ async function uploadSeatPack(input: {
 
 export function SeatsCreateForm() {
   const router = useRouter();
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId, status: accountStatus } = useAccount();
+  const isReconnecting = accountStatus === 'reconnecting';
   const { connect, connectors } = useConnect();
   const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
   const publicClient = usePublicClient();
@@ -348,6 +349,7 @@ export function SeatsCreateForm() {
     setError(null);
 
     if (!isConnected) {
+      if (isReconnecting) return; // wallet is reconnecting; wait it out
       const connector = connectors[0];
       if (connector) connect({ connector });
       return;
@@ -451,9 +453,11 @@ export function SeatsCreateForm() {
     }
   }
 
-  const primaryLabel = !isConnected
-    ? 'Connect wallet'
-    : onWrongChain
+  const primaryLabel = isReconnecting
+    ? 'Connecting…'
+    : !isConnected
+      ? 'Connect wallet'
+      : onWrongChain
       ? isSwitching
         ? 'Switching…'
         : 'Switch to Robinhood'

@@ -50,7 +50,10 @@ function formatAmount(value: bigint): string {
 }
 
 export function SeatsSeriesDesk({ series }: { series: SeatSeries }) {
-  const { address, isConnected } = useAccount();
+  // status === 'reconnecting' while wagmi re-checks localStorage after SSR; treat it the same as
+  // connected for display purposes — the wallet IS there, the client just hasn't caught up yet.
+  const { address, isConnected, status: accountStatus } = useAccount();
+  const isReconnecting = accountStatus === 'reconnecting';
   const publicClient = usePublicClient();
   const { data: walletClient } = useWalletClient();
   const [tab, setTab] = useState<DeskTab>('trade');
@@ -353,7 +356,11 @@ export function SeatsSeriesDesk({ series }: { series: SeatSeries }) {
   };
   const id = BigInt(Number(tokenId) > 0 ? tokenId : '0');
   const activationFee = stats.data?.tier0[0] ?? parseEther('66666');
-  const canTrade = busy || !isConnected;
+  // During reconnection the wallet is present but wagmi hasn't finished re-establishing the client,
+  // so walletClient is null. Keep actions disabled (signing would fail) without treating it as a
+  // genuine disconnect. Only when truly disconnected do we want to surface a "connect" prompt.
+  const walletReady = isConnected && Boolean(walletClient);
+  const canTrade = busy || !walletReady;
   const hasSeatId = Boolean(tokenId.trim()) && id > 0n;
   /** Selling, activating and borrowing all revert for anyone but the seat's owner. */
   const ownsSeat = Boolean(
@@ -475,7 +482,7 @@ export function SeatsSeriesDesk({ series }: { series: SeatSeries }) {
           <button
             type="button"
             className="pv-btn pv-btn-primary"
-            disabled={busy || !isConnected || !reveal.data?.revealable}
+            disabled={busy || !walletReady || !reveal.data?.revealable}
             onClick={revealArt}
           >
             Reveal the art
@@ -641,6 +648,15 @@ export function SeatsSeriesDesk({ series }: { series: SeatSeries }) {
               </button>
             </div>
 
+            {isReconnecting ? (
+              <p className="seat-desk-panel-note" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Loader2 className="h-3 w-3 animate-spin" style={{ flexShrink: 0 }} />
+                Wallet reconnecting…
+              </p>
+            ) : !isConnected ? (
+              <p className="seat-desk-panel-note">Connect a wallet to trade.</p>
+            ) : null}
+
             <p className="seat-desk-fee-note">
               ETH fee: {formatEther(ethFees.buy)} to buy or sell, {formatEther(ethFees.snipe)} to
               snipe — {feeBasis}. Every wei of it goes into the reward pot and back out to activated
@@ -655,7 +671,7 @@ export function SeatsSeriesDesk({ series }: { series: SeatSeries }) {
               <header className="seat-desk-panel-head">
                 <h2 className="seat-desk-panel-title">Your position</h2>
               </header>
-              {isConnected ? (
+              {isConnected || isReconnecting ? (
                 <>
                   <dl className="seat-desk-kv">
                     <div>
